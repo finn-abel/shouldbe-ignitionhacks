@@ -16,6 +16,7 @@ import httpx
 
 from app.enums import Verdict
 from app.schemas.api import MeetingAnalysis
+from app.services.costing import billable_minutes, is_clamped
 
 logger = logging.getLogger(__name__)
 
@@ -35,13 +36,21 @@ def compose_reply(analysis: MeetingAnalysis) -> tuple[str, str]:
     headline = "could be an email" if flagged else "is worth the room"
     subject = f"{analysis.title} — {headline} ({analysis.score}/10)"
 
+    charged = billable_minutes(analysis.duration_minutes)
     lines = [
         f"You invited ShouldBe to \"{analysis.title}\".",
         "",
         f"Necessity score: {analysis.score}/10 — {headline}.",
         f"This occurrence costs {_money(analysis.cost)} "
-        f"across {analysis.attendee_count} attendees for {analysis.duration_minutes} minutes.",
+        f"across {analysis.attendee_count} attendees for {charged} minutes.",
     ]
+
+    if is_clamped(analysis.duration_minutes):
+        # Otherwise the figure looks wrong to anyone who checks it against the invite.
+        lines.append(
+            f"(It is booked for {analysis.duration_minutes} minutes, but no single meeting "
+            f"is charged for more than {charged}.)"
+        )
 
     if analysis.annualized_cost is not None:
         lines.append(

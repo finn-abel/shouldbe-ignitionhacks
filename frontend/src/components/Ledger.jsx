@@ -8,6 +8,9 @@ const VERDICT = {
 
 const STATUS = { analyzed: 'On the books', held: 'Held', converted: 'Converted' };
 
+// Mirrors the backend cap: no single meeting is charged for more than a working day.
+const MAX_BILLABLE_MINUTES = 8 * 60;
+
 /**
  * The ledger — every analyzed meeting as a costed transaction (doc 2 §4.4).
  * `keep` verdicts are listed too: this is total spend, and the verdict is an attribute
@@ -75,7 +78,14 @@ export default function Ledger({ meetings, onConvert, converting }) {
                   </div>
                   <div>
                     <dt>Duration</dt>
-                    <dd className="figure">{meeting.duration_minutes}m</dd>
+                    <dd className="figure">
+                      {meeting.duration_minutes}m
+                      {meeting.duration_minutes > MAX_BILLABLE_MINUTES && (
+                        <span className="entry__capped">
+                          {' '}· billed {MAX_BILLABLE_MINUTES}m
+                        </span>
+                      )}
+                    </dd>
                   </div>
                   <div>
                     <dt>Necessity</dt>

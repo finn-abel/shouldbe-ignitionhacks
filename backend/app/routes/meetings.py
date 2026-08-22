@@ -20,6 +20,7 @@ from app.services.money import (
     reclaimed_savings,
     spend_over_time,
     total_spend,
+    within_period,
 )
 
 router = APIRouter(prefix="/api", tags=["meetings"])
@@ -36,18 +37,24 @@ def read_meetings(
 @router.get("/stats", response_model=Stats)
 def read_stats(
     bucket: Literal["day", "week"] = "day",
+    period: Literal["month", "all"] = "month",
     session: Session = Depends(get_session),
     user: User = Depends(acting_user),
 ):
     ledger = [MeetingRead.model_validate(m) for m in list_meetings(session, user.id)]
     budget = user.budget.monthly_amount if user.budget else None
 
+    # The four figures and the chart cover the requested span; the budget headline always
+    # covers the current month, because that is what a monthly budget is measured against.
+    scoped = within_period(ledger, period)
+
     return Stats(
-        total_spend=total_spend(ledger),
-        necessary_spend=necessary_spend(ledger),
-        avoidable_spend=avoidable_spend(ledger),
-        reclaimed_savings=reclaimed_savings(ledger),
-        spend_over_time=spend_over_time(ledger, bucket),
+        period=period,
+        total_spend=total_spend(scoped),
+        necessary_spend=necessary_spend(scoped),
+        avoidable_spend=avoidable_spend(scoped),
+        reclaimed_savings=reclaimed_savings(scoped),
+        spend_over_time=spend_over_time(scoped, bucket),
         budget=budget_comparison(ledger, budget),
     )
 

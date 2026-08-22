@@ -176,3 +176,60 @@ def test_doc_defaults_are_the_documented_rates():
         Tier.EXEC: Decimal("250"),
     }
     assert set(OCCURRENCES_PER_YEAR) == {"DAILY", "WEEKLY", "BIWEEKLY", "MONTHLY", "YEARLY"}
+
+
+# ----------------------------------------- a calendar is not only meetings (clamping)
+
+
+def test_an_all_day_event_bills_a_working_day_not_a_calendar_day():
+    # An .ics all-day event reads as 1440 minutes. Costing that literally puts a
+    # $21,600 "meeting" on the books for twelve people.
+    cost = meeting_cost([Tier.IC] * 12, 1440)
+
+    assert cost == Decimal("7200.00")  # 12 x 75 x 8h, not x 24h
+
+
+def test_a_multi_day_event_bills_a_working_day_too():
+    conference = meeting_cost([Tier.IC] * 12, 6240)  # a 5-day conference
+
+    assert conference == Decimal("7200.00")  # was $93,600 uncapped
+
+
+def test_ordinary_meetings_are_untouched_by_the_cap():
+    assert meeting_cost([Tier.IC] * 8 + [Tier.MANAGER], 30) == Decimal("375.00")
+    assert meeting_cost([Tier.IC], 480) == Decimal("600.00")  # exactly at the cap
+
+
+@pytest.mark.parametrize(
+    ("minutes", "expected", "clamped"),
+    [(30, 30, False), (480, 480, False), (481, 480, True), (1440, 480, True), (6240, 480, True)],
+)
+def test_billable_minutes_reports_what_is_charged_for(minutes, expected, clamped):
+    from app.services.costing import billable_minutes, is_clamped
+
+    assert billable_minutes(minutes) == expected
+    assert is_clamped(minutes) is clamped
+
+
+def test_the_cap_is_configurable(monkeypatch):
+    from app.services.costing import billable_minutes
+
+    monkeypatch.setenv("SHOULDBE_MAX_BILLABLE_MINUTES", "120")
+
+    assert billable_minutes(1440) == 120
+    assert meeting_cost([Tier.IC], 1440) == Decimal("150.00")
+
+
+def test_a_nonsense_cap_falls_back_to_the_default(monkeypatch):
+    from app.services.costing import DEFAULT_MAX_BILLABLE_MINUTES, billable_minutes
+
+    monkeypatch.setenv("SHOULDBE_MAX_BILLABLE_MINUTES", "not-a-number")
+
+    assert billable_minutes(9999) == DEFAULT_MAX_BILLABLE_MINUTES
+
+
+def test_the_cap_flows_through_to_the_annualized_figure():
+    # A weekly all-day event must not annualize off an uncapped occurrence.
+    per_occurrence = meeting_cost([Tier.IC] * 12, 1440)
+
+    assert annualized_cost(per_occurrence, True, "WEEKLY") == Decimal("374400.00")  # 7200 x 52

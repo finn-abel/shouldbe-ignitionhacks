@@ -15,10 +15,12 @@ The reading gives a clean invariant the dashboard can rely on:
     total spend == necessary spend + avoidable spend
 """
 
+import os
 from collections import defaultdict
 from datetime import date, datetime, timedelta, timezone
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Iterable, Literal
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from app.enums import Status, Verdict
 from app.schemas.api import BudgetComparison, MeetingRead, SpendBucket
@@ -27,6 +29,29 @@ CENTS = Decimal("0.01")
 ZERO = Decimal("0.00")
 
 Bucket = Literal["day", "week"]
+Period = Literal["month", "all"]
+
+# Timestamps are stored in UTC, but "this month" and "which day" are questions about the
+# calendar the team lives in. Answering them in UTC means a meeting analysed at 9pm in
+# Toronto lands on tomorrow, and on the last evening of a month the budget headline rolls
+# over and the month's spend disappears mid-demo.
+DEFAULT_TIMEZONE = "America/Toronto"
+
+
+def business_timezone() -> ZoneInfo:
+    """The calendar the figures are reported in."""
+    name = os.getenv("SHOULDBE_TIMEZONE", DEFAULT_TIMEZONE).strip() or DEFAULT_TIMEZONE
+    try:
+        return ZoneInfo(name)
+    except (ZoneInfoNotFoundError, ValueError):
+        return ZoneInfo(DEFAULT_TIMEZONE)
+
+
+def _local(moment: datetime, tz: ZoneInfo) -> datetime:
+    """A stored timestamp as it reads on the wall clock."""
+    if moment.tzinfo is None:  # defensive: the ORM already returns aware UTC
+        moment = moment.replace(tzinfo=timezone.utc)
+    return moment.astimezone(tz)
 
 
 def _money(value: Decimal) -> Decimal:
@@ -64,16 +89,43 @@ def reclaimed_savings(meetings: Iterable[MeetingRead]) -> Decimal:
     )
 
 
-def _bucket_start(moment: datetime, bucket: Bucket) -> date:
-    day = moment.date()
+def _month_of(moment: datetime, tz: ZoneInfo) -> tuple[int, int]:
+    local = _local(moment, tz)
+    return local.year, local.month
+
+
+def _bucket_start(moment: datetime, bucket: Bucket, tz: ZoneInfo) -> date:
+    day = _local(moment, tz).date()
     if bucket == "week":
         return day - timedelta(days=day.weekday())  # the Monday of that week
     return day
 
 
+def within_period(
+    meetings: Iterable[MeetingRead],
+    period: Period = "all",
+    now: datetime | None = None,
+    tz: ZoneInfo | None = None,
+) -> list[MeetingRead]:
+    """The meetings a set of figures covers.
+
+    Every dollar on the dashboard should state the span it covers, or two figures from
+    different spans sit side by side looking comparable.
+    """
+    if period == "all":
+        return list(meetings)
+    if period != "month":
+        raise ValueError(f"period must be 'month' or 'all', got {period!r}.")
+
+    zone = tz or business_timezone()
+    this_month = _month_of(now or datetime.now(timezone.utc), zone)
+    return [m for m in meetings if _month_of(m.created_at, zone) == this_month]
+
+
 def spend_over_time(
     meetings: Iterable[MeetingRead],
     bucket: Bucket = "day",
+    tz: ZoneInfo | None = None,
 ) -> list[SpendBucket]:
     """Spend grouped by day or week of `created_at`, oldest first.
 
@@ -83,10 +135,11 @@ def spend_over_time(
     if bucket not in ("day", "week"):
         raise ValueError(f"bucket must be 'day' or 'week', got {bucket!r}.")
 
+    zone = tz or business_timezone()
     totals: dict[date, Decimal] = defaultdict(lambda: ZERO)
     for meeting in meetings:
         if _happened(meeting):
-            totals[_bucket_start(meeting.created_at, bucket)] += meeting.cost
+            totals[_bucket_start(meeting.created_at, bucket, zone)] += meeting.cost
 
     return [SpendBucket(period=period, amount=_money(totals[period])) for period in sorted(totals)]
 
@@ -95,14 +148,14 @@ def budget_comparison(
     meetings: Iterable[MeetingRead],
     monthly_amount: Decimal | None,
     now: datetime | None = None,
+    tz: ZoneInfo | None = None,
 ) -> BudgetComparison:
-    """This calendar month's spend against the monthly budget (doc 2 §6)."""
-    moment = now or datetime.now(timezone.utc)
+    """This calendar month's spend against the monthly budget (doc 2 §6).
 
-    month_spend = total_spend(
-        m for m in meetings
-        if (m.created_at.year, m.created_at.month) == (moment.year, moment.month)
-    )
+    "This month" means the month it is where the team is, not where the server is.
+    """
+    zone = tz or business_timezone()
+    month_spend = total_spend(within_period(meetings, "month", now, zone))
 
     if monthly_amount is None:
         return BudgetComparison(

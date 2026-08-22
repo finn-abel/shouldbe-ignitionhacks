@@ -6,6 +6,11 @@ import { formatMoney, formatMoneyExact } from '../lib/format.js';
 
 const BUCKETS = ['day', 'week'];
 
+const PERIODS = [
+  { key: 'month', label: 'This month' },
+  { key: 'all', label: 'All time' },
+];
+
 /** The four dollar concepts of doc 2 §6, kept visibly distinct. */
 const TILES = [
   { key: 'necessary_spend', label: 'Necessary', note: 'worth the room', tone: 'ink' },
@@ -15,6 +20,7 @@ const TILES = [
 
 export default function Dashboard({ refreshKey }) {
   const [bucket, setBucket] = useState('day');
+  const [period, setPeriod] = useState('month');
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [converting, setConverting] = useState(null);
@@ -22,12 +28,15 @@ export default function Dashboard({ refreshKey }) {
   const load = useCallback(async () => {
     try {
       setError(null);
-      const [stats, meetings] = await Promise.all([getStats({ bucket }), listMeetings()]);
+      const [stats, meetings] = await Promise.all([
+        getStats({ bucket, period }),
+        listMeetings(),
+      ]);
       setData({ stats, meetings });
     } catch (failure) {
       setError(failure.message);
     }
-  }, [bucket]);
+  }, [bucket, period]);
 
   useEffect(() => {
     load();
@@ -107,6 +116,25 @@ export default function Dashboard({ refreshKey }) {
           </p>
         )}
       </section>
+
+      <div className="tiles__head">
+        <p className="eyebrow">
+          {period === 'month' ? 'This month' : 'All time'} — spend and savings
+        </p>
+        <div className="chips">
+          {PERIODS.map(({ key, label }) => (
+            <button
+              key={key}
+              type="button"
+              className="chip"
+              aria-pressed={period === key}
+              onClick={() => setPeriod(key)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
 
       <section className="tiles">
         <div className="tile tile--total">

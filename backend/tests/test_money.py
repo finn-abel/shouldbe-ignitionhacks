@@ -5,7 +5,8 @@ conflating any two of them is the failure mode doc 2 §6 exists to prevent. Pure
 functions take `MeetingRead`, so no database is involved.
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 from decimal import Decimal
 
 import pytest
@@ -14,6 +15,7 @@ from app.enums import Status, Tier, Verdict
 from app.schemas.api import MeetingRead
 from app.services.money import (
     avoidable_spend,
+    within_period,
     budget_comparison,
     necessary_spend,
     reclaimed_savings,
@@ -306,3 +308,99 @@ def test_converting_twice_cannot_inflate_savings():
     assert reclaimed_savings([
         meeting("450.00", Verdict.EMAIL, Status.CONVERTED, reclaimed=str(twice))
     ]) == Decimal("450.00")
+
+
+# ------------------------------------------- the calendar the team actually lives in
+
+TORONTO = ZoneInfo("America/Toronto")
+
+
+def test_this_month_follows_the_team_not_the_server():
+    # 9pm on Aug 31 in Toronto is already Sep 1 in UTC. Reporting in UTC rolls the
+    # headline over mid-demo and August's spend vanishes.
+    evening_of_the_31st = datetime(2026, 9, 1, 1, 0, tzinfo=timezone.utc)
+    ledger = [
+        meeting("500.00", Verdict.KEEP, Status.ANALYZED,
+                created_at=datetime(2026, 8, 20, 15, 0, tzinfo=timezone.utc)),
+        meeting("400.00", Verdict.KEEP, Status.ANALYZED, created_at=evening_of_the_31st),
+    ]
+
+    result = budget_comparison(ledger, Decimal("1000.00"), now=evening_of_the_31st, tz=TORONTO)
+
+    assert result.month_spend == Decimal("900.00")  # both, because it is still August
+    assert result.is_over_budget is False
+
+
+def test_an_evening_meeting_lands_on_the_day_it_was_held():
+    # 7pm and 9pm the same Toronto evening straddle midnight UTC.
+    ledger = [
+        meeting("100.00", Verdict.KEEP, Status.ANALYZED,
+                created_at=datetime(2026, 8, 21, 23, 0, tzinfo=timezone.utc)),
+        meeting("100.00", Verdict.KEEP, Status.ANALYZED,
+                created_at=datetime(2026, 8, 22, 1, 0, tzinfo=timezone.utc)),
+    ]
+
+    buckets = spend_over_time(ledger, "day", tz=TORONTO)
+
+    assert len(buckets) == 1
+    assert buckets[0].period == date(2026, 8, 21)
+    assert buckets[0].amount == Decimal("200.00")
+
+
+def test_the_timezone_is_configurable():
+    from app.services import money
+
+    evening = datetime(2026, 9, 1, 1, 0, tzinfo=timezone.utc)
+    ledger = [meeting("400.00", Verdict.KEEP, Status.ANALYZED, created_at=evening)]
+
+    # In UTC that timestamp is September; in Toronto it is still August.
+    assert budget_comparison(ledger, Decimal("1000"), now=evening,
+                             tz=ZoneInfo("UTC")).month_spend == Decimal("400.00")
+    august = budget_comparison(
+        ledger, Decimal("1000"), now=datetime(2026, 8, 31, 20, 0, tzinfo=timezone.utc), tz=TORONTO
+    )
+    assert august.month_spend == Decimal("400.00")
+    assert money.business_timezone() is not None
+
+
+def test_an_unknown_timezone_falls_back_rather_than_crashing(monkeypatch):
+    from app.services import money
+
+    monkeypatch.setenv("SHOULDBE_TIMEZONE", "Mars/Olympus_Mons")
+
+    assert money.business_timezone() == ZoneInfo(money.DEFAULT_TIMEZONE)
+
+
+# ------------------------------------------------------------ period scoping
+
+
+def test_the_month_period_keeps_only_this_month():
+    now = datetime(2026, 8, 15, 12, 0, tzinfo=timezone.utc)
+    ledger = [
+        meeting("100.00", Verdict.KEEP, Status.ANALYZED, created_at=now),
+        meeting("900.00", Verdict.KEEP, Status.ANALYZED,
+                created_at=datetime(2026, 7, 15, 12, 0, tzinfo=timezone.utc)),
+    ]
+
+    assert total_spend(within_period(ledger, "month", now, TORONTO)) == Decimal("100.00")
+    assert total_spend(within_period(ledger, "all", now, TORONTO)) == Decimal("1000.00")
+
+
+def test_the_month_period_matches_the_budget_headline():
+    # The two must never disagree, or the tiles contradict the headline above them.
+    now = datetime(2026, 8, 15, 12, 0, tzinfo=timezone.utc)
+    ledger = [
+        meeting("100.00", Verdict.KEEP, Status.ANALYZED, created_at=now),
+        meeting("900.00", Verdict.EMAIL, Status.HELD,
+                created_at=datetime(2026, 7, 15, 12, 0, tzinfo=timezone.utc)),
+    ]
+
+    scoped = total_spend(within_period(ledger, "month", now, TORONTO))
+    headline = budget_comparison(ledger, Decimal("500"), now=now, tz=TORONTO).month_spend
+
+    assert scoped == headline == Decimal("100.00")
+
+
+def test_an_unknown_period_is_rejected():
+    with pytest.raises(ValueError, match="month.*all"):
+        within_period([], "quarter")

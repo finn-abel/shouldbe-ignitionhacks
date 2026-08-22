@@ -73,9 +73,10 @@ export function getMeeting(id) {
   return request(`/api/meetings/${id}`);
 }
 
-/** The four dollar figures, the burn-rate series, and the budget headline. */
-export function getStats({ bucket = 'day' } = {}) {
-  return request(`/api/stats?bucket=${bucket}`);
+/** The four dollar figures, the burn-rate series, and the budget headline.
+ *  `period` scopes the figures and the series; the budget headline is always monthly. */
+export function getStats({ bucket = 'day', period = 'month' } = {}) {
+  return request(`/api/stats?bucket=${bucket}&period=${period}`);
 }
 
 export function getBudget() {

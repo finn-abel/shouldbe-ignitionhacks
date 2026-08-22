@@ -75,8 +75,14 @@ class BudgetComparison(BaseModel):
 
 
 class Stats(BaseModel):
-    """The four dollar concepts, the burn-rate series, and the budget headline."""
+    """The four dollar concepts, the burn-rate series, and the budget headline.
 
+    `period` names the span the four figures and the series cover, so nothing on the
+    dashboard is a dollar amount without a stated span. The budget headline is always the
+    current month — it compares against a monthly budget.
+    """
+
+    period: str
     total_spend: Decimal
     necessary_spend: Decimal
     avoidable_spend: Decimal

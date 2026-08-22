@@ -484,3 +484,15 @@
 }
 
 .whoami__out:hover { color: var(--leak); }
+
+/* The period control sits with the figures it governs, not in the masthead. */
+.tiles__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--gap-tight);
+  flex-wrap: wrap;
+  margin-bottom: calc(-1 * var(--gap-tight));
+}
+
+.entry__capped { color: var(--ink-faint); font-weight: 400; }
