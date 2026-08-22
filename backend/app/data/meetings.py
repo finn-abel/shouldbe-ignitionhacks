@@ -45,6 +45,8 @@ def save_analysis(
         organizer_email=analysis.organizer_email,
         is_recurring=analysis.is_recurring,
         recurrence_freq=analysis.recurrence_freq,
+        budget_scope_type=analysis.budget_scope_type,
+        budget_scope_name=analysis.budget_scope_name,
         cost=analysis.cost,
         annualized_cost=analysis.annualized_cost,
         score=analysis.score,

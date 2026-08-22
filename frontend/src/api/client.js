@@ -92,11 +92,19 @@ export function getBudget() {
   return request('/api/budget');
 }
 
-export function updateBudget(monthlyAmount) {
+export function updateBudget(config) {
+  const body =
+    typeof config === 'object' && config !== null
+      ? config
+      : { monthly_amount: config };
   return request('/api/budget', {
     method: 'PUT',
-    body: JSON.stringify({ monthly_amount: monthlyAmount }),
+    body: JSON.stringify(body),
   });
+}
+
+export function checkBudgetGuardrail(meeting) {
+  return request('/api/budget/guardrail', { method: 'POST', body: JSON.stringify(meeting) });
 }
 
 export function getTierRates() {

@@ -84,6 +84,11 @@ export default function Dashboard({ refreshKey }) {
   const { stats, meetings } = data;
   const { budget } = stats;
   const over = budget.is_over_budget;
+  const usagePercent = Math.max(0, Math.min(100, Number(budget.usage_percent ?? 0)));
+  const budgetWarn = !over && Number(budget.threshold ?? 0) >= 80;
+  const budgetScopeLabel = budget.scope_name
+    ? `${budget.scope_name} ${budget.scope_type}`
+    : 'Current';
   const actionableMeetings = meetings
     .filter((meeting) => meeting.verdict === 'email' && meeting.status !== 'converted');
   const convertedMeetings = meetings.filter((meeting) => meeting.status === 'converted');
@@ -99,24 +104,50 @@ export default function Dashboard({ refreshKey }) {
 
   return (
     <div className="dashboard">
-      <section className={`dashboard-hero ${over ? 'dashboard-hero--over' : ''}`}>
+      <section
+        className={`dashboard-hero ${over ? 'dashboard-hero--over' : ''} ${
+          budgetWarn ? 'dashboard-hero--warn' : ''
+        }`}
+      >
         <div className={`headline ${over ? 'headline--over' : ''}`}>
-          <p className="eyebrow">Meeting spend this month</p>
+          <p className="eyebrow">{budgetScopeLabel} meeting spend this month</p>
           <p className="headline__figure figure">{formatMoney(budget.month_spend)}</p>
 
           {budget.monthly_amount === null ? (
             <p className="headline__verdict">No budget set yet.</p>
           ) : (
-            <p className="headline__verdict">
-              <strong className="figure">
-                {Math.abs(Math.round(budget.percent_over ?? 0))}%
-              </strong>{' '}
-              {over ? 'over' : 'under'} a {formatMoney(budget.monthly_amount)} budget
-              <span className="headline__delta figure">
-                {over ? '+' : ''}
-                {formatMoneyExact(budget.difference)}
-              </span>
-            </p>
+            <>
+              <p className="headline__verdict">
+                <strong className="figure">
+                  {Math.round(budget.usage_percent ?? 0)}%
+                </strong>{' '}
+                used of a {formatMoney(budget.monthly_amount)} budget
+                <span className="headline__delta figure">
+                  {over ? '+' : ''}
+                  {formatMoneyExact(budget.difference)}
+                </span>
+              </p>
+              <div className="budget-meter" style={{ '--budget-usage': usagePercent }}>
+                <span className="budget-meter__fill" />
+                {[50, 80, 100].map((mark) => (
+                  <span
+                    key={mark}
+                    className="budget-meter__mark"
+                    style={{ '--budget-mark': mark }}
+                  >
+                    {mark}%
+                  </span>
+                ))}
+              </div>
+              <p className="headline__remaining">
+                {over ? 'Over budget by' : 'Remaining budget'}{' '}
+                <strong className="figure">
+                  {formatMoneyExact(
+                    over ? Math.abs(Number(budget.remaining_amount ?? 0)) : budget.remaining_amount,
+                  )}
+                </strong>
+              </p>
+            </>
           )}
         </div>
 

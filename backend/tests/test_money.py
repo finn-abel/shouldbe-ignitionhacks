@@ -11,11 +11,13 @@ from decimal import Decimal
 
 import pytest
 
-from app.enums import Status, Tier, Verdict
+from app.enums import BudgetScope, Status, Tier, Verdict
 from app.schemas.api import MeetingRead
 from app.services.money import (
     avoidable_spend,
+    budget_guardrail,
     within_period,
+    within_budget_scope,
     budget_comparison,
     necessary_spend,
     reclaimed_savings,
@@ -28,7 +30,16 @@ JAN = datetime(2026, 1, 15, 12, 0, tzinfo=timezone.utc)
 _next_id = iter(range(1, 10_000))
 
 
-def meeting(cost, verdict, status, *, reclaimed="0.00", created_at=JAN) -> MeetingRead:
+def meeting(
+    cost,
+    verdict,
+    status,
+    *,
+    reclaimed="0.00",
+    created_at=JAN,
+    budget_scope_type=BudgetScope.USER,
+    budget_scope_name="Personal",
+) -> MeetingRead:
     """A ledger row with only the fields the money model reads varying."""
     return MeetingRead(
         id=next(_next_id),
@@ -41,6 +52,8 @@ def meeting(cost, verdict, status, *, reclaimed="0.00", created_at=JAN) -> Meeti
         organizer_email="o@x.com",
         is_recurring=False,
         recurrence_freq=None,
+        budget_scope_type=budget_scope_type,
+        budget_scope_name=budget_scope_name,
         cost=Decimal(cost),
         annualized_cost=None,
         score=5,
@@ -231,6 +244,19 @@ def test_under_budget_reports_a_negative_difference():
     assert result.is_over_budget is False
     assert result.difference == Decimal("-600.00")
     assert round(result.percent_over) == -60
+    assert result.remaining_amount == Decimal("600.00")
+    assert round(result.usage_percent) == 40
+    assert result.threshold is None
+
+
+def test_budget_soft_thresholds_are_reported():
+    ledger = [meeting("820.00", Verdict.KEEP, Status.ANALYZED)]
+
+    result = budget_comparison(ledger, Decimal("1000.00"), now=JAN)
+
+    assert result.remaining_amount == Decimal("180.00")
+    assert round(result.usage_percent) == 82
+    assert result.threshold == 80
 
 
 def test_only_the_current_month_counts_toward_the_budget():
@@ -270,6 +296,7 @@ def test_a_zero_budget_reports_dollars_rather_than_dividing_by_zero():
     result = budget_comparison(ledger, Decimal("0"), now=JAN)
 
     assert result.percent_over is None
+    assert result.usage_percent is None
     assert result.difference == Decimal("400.00")
     assert result.is_over_budget is True
 
@@ -278,8 +305,60 @@ def test_an_empty_month_is_not_over_budget():
     result = budget_comparison([], Decimal("1000.00"), now=JAN)
 
     assert result.month_spend == Decimal("0.00")
+    assert result.remaining_amount == Decimal("1000.00")
     assert result.is_over_budget is False
     assert round(result.percent_over) == -100
+
+
+def test_budget_scope_filters_team_and_department_spend():
+    ledger = [
+        meeting("100.00", Verdict.KEEP, Status.ANALYZED),
+        meeting(
+            "200.00",
+            Verdict.KEEP,
+            Status.ANALYZED,
+            budget_scope_type=BudgetScope.TEAM,
+            budget_scope_name="Platform",
+        ),
+        meeting(
+            "300.00",
+            Verdict.KEEP,
+            Status.ANALYZED,
+            budget_scope_type=BudgetScope.DEPARTMENT,
+            budget_scope_name="Digital",
+        ),
+    ]
+
+    assert total_spend(within_budget_scope(ledger, BudgetScope.USER, "Personal")) == Decimal("100.00")
+    assert total_spend(within_budget_scope(ledger, BudgetScope.TEAM, "Platform")) == Decimal("200.00")
+    assert total_spend(within_budget_scope(ledger, BudgetScope.DEPARTMENT, "Digital")) == Decimal("300.00")
+
+
+def test_guardrail_warns_before_a_meeting_crosses_the_budget():
+    ledger = [
+        meeting(
+            "900.00",
+            Verdict.KEEP,
+            Status.ANALYZED,
+            budget_scope_type=BudgetScope.TEAM,
+            budget_scope_name="Platform",
+        )
+    ]
+
+    result = budget_guardrail(
+        ledger,
+        Decimal("1000.00"),
+        Decimal("150.00"),
+        scope_type=BudgetScope.TEAM,
+        scope_name="Platform",
+        now=JAN,
+    )
+
+    assert result.exceeds_budget is True
+    assert result.threshold_crossed == 100
+    assert result.projected_spend == Decimal("1050.00")
+    assert result.projected_remaining_amount == Decimal("-50.00")
+    assert "exceed" in result.warning
 
 
 # --------------------------------------------------------- the convert transition

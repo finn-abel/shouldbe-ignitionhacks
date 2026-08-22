@@ -6,9 +6,9 @@ ORM models never leave an endpoint; these are what the API actually returns.
 from datetime import date, datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, ConfigDict, Field, RootModel, field_validator
+from pydantic import BaseModel, ConfigDict, Field, RootModel, field_validator, model_validator
 
-from app.enums import OutboxStatus, Status, Tier, Verdict
+from app.enums import BudgetScope, OutboxStatus, Status, Tier, Verdict
 
 
 class MeetingAnalysis(BaseModel):
@@ -28,6 +28,8 @@ class MeetingAnalysis(BaseModel):
     organizer_email: str
     is_recurring: bool
     recurrence_freq: str | None
+    budget_scope_type: BudgetScope | None = BudgetScope.USER
+    budget_scope_name: str | None = None
 
     # --- computed financials ---
     cost: Decimal
@@ -44,6 +46,15 @@ class MeetingAnalysis(BaseModel):
     # --- lifecycle / money state ---
     status: Status
     reclaimed_savings: Decimal
+
+    @model_validator(mode="after")
+    def _default_budget_scope(self):
+        if self.budget_scope_type is None:
+            object.__setattr__(self, "budget_scope_type", BudgetScope.USER)
+        if not self.budget_scope_name:
+            name = "Personal" if self.budget_scope_type is BudgetScope.USER else self.budget_scope_type.value.title()
+            object.__setattr__(self, "budget_scope_name", name)
+        return self
 
 
 class MeetingRead(MeetingAnalysis):
@@ -71,9 +82,14 @@ class BudgetComparison(BaseModel):
 
     monthly_amount: Decimal | None
     month_spend: Decimal
+    remaining_amount: Decimal | None = None
+    usage_percent: float | None = None
     difference: Decimal | None        # spend - budget; positive means over
     percent_over: float | None        # the "34% over budget" headline
     is_over_budget: bool
+    threshold: int | None = None
+    scope_type: BudgetScope = BudgetScope.USER
+    scope_name: str = "Personal"
 
 
 class Stats(BaseModel):
@@ -93,14 +109,49 @@ class Stats(BaseModel):
     budget: BudgetComparison
 
 
+class ScopedBudgetRead(BaseModel):
+    """One configured monthly budget guardrail."""
+
+    scope_type: BudgetScope
+    scope_name: str
+    monthly_amount: Decimal | None = None
+    is_active: bool = False
+
+
 class BudgetRead(BaseModel):
-    """The acting user's monthly meeting budget. Null when they have not set one."""
+    """The acting user's user/team/department monthly meeting budgets."""
 
     monthly_amount: Decimal | None
+    active_scope_type: BudgetScope = BudgetScope.USER
+    active_scope_name: str = "Personal"
+    budgets: list[ScopedBudgetRead] = Field(default_factory=list)
+
+
+class ScopedBudgetUpdate(BaseModel):
+    scope_type: BudgetScope
+    scope_name: str = Field(min_length=1, max_length=255)
+    monthly_amount: Decimal | None = Field(default=None, ge=0, le=Decimal("100000000"))
+    is_active: bool = False
 
 
 class BudgetUpdate(BaseModel):
-    monthly_amount: Decimal = Field(ge=0, le=Decimal("100000000"))
+    monthly_amount: Decimal | None = Field(default=None, ge=0, le=Decimal("100000000"))
+    active_scope_type: BudgetScope = BudgetScope.USER
+    active_scope_name: str = Field(default="Personal", min_length=1, max_length=255)
+    budgets: list[ScopedBudgetUpdate] | None = None
+
+
+class BudgetGuardrailRead(BaseModel):
+    """Projected budget impact before a meeting is recorded."""
+
+    budget: BudgetComparison
+    meeting_cost: Decimal
+    projected_spend: Decimal
+    projected_remaining_amount: Decimal | None = None
+    projected_usage_percent: float | None = None
+    threshold_crossed: int | None = None
+    exceeds_budget: bool
+    warning: str | None = None
 
 
 class TierRates(RootModel[dict[Tier, Decimal]]):

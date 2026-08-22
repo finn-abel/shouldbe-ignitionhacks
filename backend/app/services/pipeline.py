@@ -46,6 +46,8 @@ def analyze(
         organizer_email=invite.organizer_email,
         is_recurring=invite.is_recurring,
         recurrence_freq=invite.recurrence_freq,
+        budget_scope_type=invite.budget_scope_type,
+        budget_scope_name=invite.budget_scope_name,
         cost=cost,
         annualized_cost=yearly,
         score=assessment["score"],

@@ -8,6 +8,7 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.data.budgets import get_budget_config
 from app.data.db import get_session
 from app.data.meetings import NotConvertible, convert_meeting, get_meeting, list_meetings
 from app.data.models import User
@@ -20,6 +21,7 @@ from app.services.money import (
     reclaimed_savings,
     spend_over_time,
     total_spend,
+    within_budget_scope,
     within_period,
 )
 
@@ -42,7 +44,10 @@ def read_stats(
     user: User = Depends(acting_user),
 ):
     ledger = [MeetingRead.model_validate(m) for m in list_meetings(session, user.id)]
-    budget = user.budget.monthly_amount if user.budget else None
+    budget_config = get_budget_config(session, user.id)
+    budget_ledger = within_budget_scope(
+        ledger, budget_config.active_scope_type, budget_config.active_scope_name
+    )
 
     # The four figures and the chart cover the requested span; the budget headline always
     # covers the current month, because that is what a monthly budget is measured against.
@@ -55,7 +60,12 @@ def read_stats(
         avoidable_spend=avoidable_spend(scoped),
         reclaimed_savings=reclaimed_savings(scoped),
         spend_over_time=spend_over_time(scoped, bucket),
-        budget=budget_comparison(ledger, budget),
+        budget=budget_comparison(
+            budget_ledger,
+            budget_config.monthly_amount,
+            scope_type=budget_config.active_scope_type,
+            scope_name=budget_config.active_scope_name,
+        ),
     )
 
 

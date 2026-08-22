@@ -1,4 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { checkBudgetGuardrail, getBudget } from '../api/client.js';
+import { formatMoney, formatMoneyExact } from '../lib/format.js';
 
 const TIERS = [
   { key: 'ic', label: 'IT-02', note: 'delivery / analysis' },
@@ -9,6 +11,11 @@ const TIERS = [
 
 const DURATIONS = [15, 30, 45, 60, 90];
 const FREQUENCIES = ['DAILY', 'WEEKLY', 'BIWEEKLY', 'MONTHLY'];
+const FALLBACK_BUDGETS = [
+  { scope_type: 'user', scope_name: 'Personal', monthly_amount: null, is_active: true },
+  { scope_type: 'team', scope_name: 'Team', monthly_amount: null, is_active: false },
+  { scope_type: 'department', scope_name: 'Department', monthly_amount: null, is_active: false },
+];
 
 const EMPTY = {
   title: '',
@@ -17,6 +24,8 @@ const EMPTY = {
   organizer_email: '',
   is_recurring: true,
   recurrence_freq: 'WEEKLY',
+  budget_scope_type: 'user',
+  budget_scope_name: 'Personal',
 };
 
 const EMPTY_ATTENDEES = { ic: 8, senior: 0, manager: 1, exec: 0 };
@@ -29,9 +38,33 @@ const EMPTY_ATTENDEES = { ic: 8, senior: 0, manager: 1, exec: 0 };
 export default function AnalyzeForm({ onAnalyzed, pending, error, notice }) {
   const [fields, setFields] = useState(EMPTY);
   const [attendees, setAttendees] = useState(EMPTY_ATTENDEES);
+  const [budgetScopes, setBudgetScopes] = useState(FALLBACK_BUDGETS);
+  const [checkingBudget, setCheckingBudget] = useState(false);
+  const [guardrail, setGuardrail] = useState(null);
+  const [guardrailError, setGuardrailError] = useState(null);
 
   const headcount = Object.values(attendees).reduce((sum, n) => sum + n, 0);
   const cadence = fields.is_recurring ? fields.recurrence_freq.toLowerCase() : 'one-off';
+  const activeScope = budgetScopes.find(
+    (scope) =>
+      scope.scope_type === fields.budget_scope_type &&
+      scope.scope_name === fields.budget_scope_name,
+  );
+
+  useEffect(() => {
+    getBudget()
+      .then((budget) => {
+        const scopes = budget.budgets?.length ? budget.budgets : FALLBACK_BUDGETS;
+        const active = scopes.find((scope) => scope.is_active) ?? scopes[0];
+        setBudgetScopes(scopes);
+        setFields((prev) => ({
+          ...prev,
+          budget_scope_type: active.scope_type,
+          budget_scope_name: active.scope_name,
+        }));
+      })
+      .catch(() => {});
+  }, []);
 
   const set = (key) => (event) => {
     const target = event.target;
@@ -44,14 +77,48 @@ export default function AnalyzeForm({ onAnalyzed, pending, error, notice }) {
   const setTier = (key, next) =>
     setAttendees((prev) => ({ ...prev, [key]: Math.max(0, next) }));
 
-  const submit = (event) => {
+  const selectBudgetScope = (scope) => {
+    setFields((prev) => ({
+      ...prev,
+      budget_scope_type: scope.scope_type,
+      budget_scope_name: scope.scope_name,
+    }));
+    setGuardrail(null);
+    setGuardrailError(null);
+  };
+
+  const payload = () => ({
+    ...fields,
+    duration_minutes: Number(fields.duration_minutes),
+    attendees,
+    recurrence_freq: fields.is_recurring ? fields.recurrence_freq : null,
+  });
+
+  const submit = async (event) => {
     event.preventDefault();
-    onAnalyzed({
-      ...fields,
-      duration_minutes: Number(fields.duration_minutes),
-      attendees,
-      recurrence_freq: fields.is_recurring ? fields.recurrence_freq : null,
-    });
+    const meeting = payload();
+    const signature = JSON.stringify(meeting);
+    if (guardrail?.signature === signature) {
+      setGuardrail(null);
+      onAnalyzed(meeting);
+      return;
+    }
+
+    setGuardrail(null);
+    setGuardrailError(null);
+    setCheckingBudget(true);
+    try {
+      const projection = await checkBudgetGuardrail(meeting);
+      if (projection.warning) {
+        setGuardrail({ ...projection, signature });
+        return;
+      }
+      onAnalyzed(meeting);
+    } catch (failure) {
+      setGuardrailError(failure.message);
+    } finally {
+      setCheckingBudget(false);
+    }
   };
 
   return (
@@ -184,20 +251,70 @@ export default function AnalyzeForm({ onAnalyzed, pending, error, notice }) {
         )}
       </div>
 
+      <fieldset className="field">
+        <legend className="field__label">
+          Budget owner
+          {activeScope?.monthly_amount !== null && activeScope?.monthly_amount !== undefined && (
+            <span className="field__hint figure">{formatMoney(activeScope.monthly_amount)}</span>
+          )}
+        </legend>
+        <div className="chips">
+          {budgetScopes.map((scope) => (
+            <button
+              key={`${scope.scope_type}:${scope.scope_name}`}
+              type="button"
+              className="chip"
+              aria-pressed={
+                fields.budget_scope_type === scope.scope_type &&
+                fields.budget_scope_name === scope.scope_name
+              }
+              onClick={() => selectBudgetScope(scope)}
+            >
+              {scope.scope_name}
+            </button>
+          ))}
+        </div>
+      </fieldset>
+
       {error && (
         <p className="notice notice--error" role="alert">
           {error}
         </p>
       )}
 
-      {!error && notice?.message && (
+      {!error && guardrailError && (
+        <p className="notice notice--error" role="alert">
+          {guardrailError}
+        </p>
+      )}
+
+      {!error && !guardrailError && guardrail?.warning && (
+        <p className="notice notice--warning" role="alert">
+          {guardrail.warning}{' '}
+          <span className="figure">
+            Remaining after this: {formatMoneyExact(guardrail.projected_remaining_amount)}
+          </span>
+        </p>
+      )}
+
+      {!error && !guardrailError && !guardrail?.warning && notice?.message && (
         <p className="notice notice--warning" role="alert">
           {notice.message}
         </p>
       )}
 
-      <button className="submit" type="submit" disabled={pending || !fields.title.trim()}>
-        {pending ? 'Analyzing…' : 'Analyze this meeting'}
+      <button
+        className="submit"
+        type="submit"
+        disabled={pending || checkingBudget || !fields.title.trim()}
+      >
+        {pending
+          ? 'Analyzing…'
+          : checkingBudget
+            ? 'Checking budget…'
+            : guardrail?.warning
+              ? 'Analyze anyway'
+              : 'Analyze this meeting'}
       </button>
     </form>
   );

@@ -23,7 +23,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import TypeDecorator
 
 from app.data.db import Base
-from app.enums import OutboxStatus, Status, Tier, Verdict
+from app.enums import BudgetScope, OutboxStatus, Status, Tier, Verdict
 
 class UtcDateTime(TypeDecorator):
     """Timestamps that are UTC-aware on the way in and on the way out, on any dialect.
@@ -99,6 +99,9 @@ class User(Base):
     budget: Mapped["Budget | None"] = relationship(
         back_populates="user", cascade="all, delete-orphan", uselist=False
     )
+    scoped_budgets: Mapped[list["ScopedBudget"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
     meetings: Mapped[list["Meeting"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
@@ -119,7 +122,11 @@ class RoleTierRate(Base):
 
 
 class Budget(Base):
-    """One org-wide monthly meeting budget per user (§4.3)."""
+    """Legacy user-level monthly meeting budget (§4.3).
+
+    Scoped budgets live in `scoped_budgets`; this row is retained so existing seeded and
+    signed-in users keep their user budget without a data migration.
+    """
 
     __tablename__ = "budgets"
 
@@ -130,6 +137,24 @@ class Budget(Base):
     monthly_amount: Mapped[Decimal] = mapped_column(MONEY, nullable=False)
 
     user: Mapped[User] = relationship(back_populates="budget")
+
+
+class ScopedBudget(Base):
+    """A monthly meeting budget for one user/team/department guardrail."""
+
+    __tablename__ = "scoped_budgets"
+    __table_args__ = (
+        UniqueConstraint("user_id", "scope_type", "scope_name", name="uq_budget_scope_per_user"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    scope_type: Mapped[BudgetScope] = _enum_column(BudgetScope, nullable=False)
+    scope_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    monthly_amount: Mapped[Decimal] = mapped_column(MONEY, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+
+    user: Mapped[User] = relationship(back_populates="scoped_budgets")
 
 
 class Meeting(Base):
@@ -165,6 +190,8 @@ class Meeting(Base):
     organizer_email: Mapped[str] = mapped_column(String(320), nullable=False)
     is_recurring: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     recurrence_freq: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    budget_scope_type: Mapped[BudgetScope | None] = _enum_column(BudgetScope, nullable=True)
+    budget_scope_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     # --- computed financials ---
     cost: Mapped[Decimal] = mapped_column(MONEY, nullable=False)
