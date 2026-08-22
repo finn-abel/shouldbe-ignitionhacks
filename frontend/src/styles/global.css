@@ -10,6 +10,7 @@ body {
   font-size: var(--text-base);
   line-height: 1.55;
   -webkit-font-smoothing: antialiased;
+  transition: background var(--duration) var(--ease), color var(--duration) var(--ease);
 }
 
 /* Every figure in this app is money or a count — align them like a ledger. */
@@ -18,9 +19,14 @@ body {
 h1, h2, h3 { margin: 0; line-height: 1.15; font-weight: 620; letter-spacing: -0.018em; }
 
 :focus-visible {
-  outline: 2px solid var(--ink);
+  outline: 2px solid var(--brand);
   outline-offset: 2px;
   border-radius: 2px;
+}
+
+::selection {
+  background: var(--brand);
+  color: var(--brand-contrast);
 }
 
 .eyebrow {

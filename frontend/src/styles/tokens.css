@@ -1,37 +1,39 @@
 /* ShouldBe design tokens.
-   Direction: a financial instrument on paper — warm ink-on-stock, dense figures set in
-   tabular monospace, one signal colour for money leaking and one for money defended.
-   Deliberately not a dark dashboard: this reads as a statement you were handed. */
+   Direction: a meeting-cost instrument with dark green as the brand anchor, dense
+   tabular figures, and warm/cool signal colours that still carry labels in the UI. */
 
 :root {
   color-scheme: light;
 
   /* --- surface --- */
-  --paper: oklch(98.6% 0.006 85);
-  --paper-raised: oklch(100% 0 0);
-  --paper-sunken: oklch(96.2% 0.008 85);
-  --rule: oklch(88% 0.008 85);
-  --rule-strong: oklch(78% 0.01 85);
+  --paper: oklch(97.5% 0.012 150);
+  --paper-raised: oklch(99.5% 0.006 145);
+  --paper-sunken: oklch(94.2% 0.018 150);
+  --rule: oklch(86% 0.024 150);
+  --rule-strong: oklch(73% 0.04 150);
 
   /* --- ink --- */
-  --ink: oklch(22% 0.018 265);
-  --ink-soft: oklch(46% 0.014 265);
-  --ink-faint: oklch(62% 0.012 265);
+  --ink: oklch(21% 0.035 155);
+  --ink-soft: oklch(42% 0.035 155);
+  --ink-faint: oklch(58% 0.03 155);
+
+  /* --- brand --- */
+  --brand: oklch(29% 0.095 156);
+  --brand-strong: oklch(23% 0.09 156);
+  --brand-soft: oklch(48% 0.09 154);
+  --brand-wash: oklch(92% 0.04 150);
+  --brand-contrast: oklch(98% 0.012 96);
+  --accent: oklch(69% 0.145 78);
+  --accent-wash: oklch(94.5% 0.04 82);
 
   /* --- signal: colour carries meaning, never decoration ---
-     Validated with the dataviz palette checker against this surface, not by eye.
-     The pair that appears side by side in the money tiles is leak vs reclaim
-     (warm/cool): CVD deltaE 22.1 protan, 30.4 tritan — comfortably clear.
-     leak vs defend is the red/green pair, which sits at deltaE 8.0 deutan; it only
-     ever appears as a verdict badge carrying its own text label, so identity is
-     never colour-alone. Necessary spend and total spend wear ink, not a hue —
-     the two figures worth acting on are the two that get colour. */
-  --leak: oklch(54% 0.17 34);          /* avoidable spend, the email verdict */
-  --leak-wash: oklch(95.5% 0.03 44);
-  --defend: oklch(50% 0.14 162);       /* the keep verdict */
-  --defend-wash: oklch(95.5% 0.028 168);
-  --reclaim: oklch(48% 0.15 255);      /* reclaimed savings — money not spent */
-  --reclaim-wash: oklch(95.5% 0.03 255);
+     Necessary spend and total spend wear ink/brand; the action figures get colour. */
+  --leak: oklch(55% 0.16 34);
+  --leak-wash: oklch(94.5% 0.035 42);
+  --defend: oklch(43% 0.115 158);
+  --defend-wash: oklch(92.5% 0.045 154);
+  --reclaim: oklch(48% 0.13 235);
+  --reclaim-wash: oklch(92.5% 0.035 235);
 
   /* --- type --- */
   --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -53,11 +55,43 @@
   --radius: 3px;
   --radius-card: 6px;
 
-  --shadow-card: 0 1px 2px oklch(22% 0.018 265 / 0.05),
-                 0 12px 28px -18px oklch(22% 0.018 265 / 0.35);
+  --shadow-card: 0 1px 2px oklch(18% 0.055 155 / 0.05),
+                 0 12px 28px -18px oklch(18% 0.055 155 / 0.35);
 
   --duration: 180ms;
   --ease: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --paper: oklch(15.5% 0.035 156);
+  --paper-raised: oklch(19.5% 0.04 156);
+  --paper-sunken: oklch(12.5% 0.03 156);
+  --rule: oklch(28% 0.055 156);
+  --rule-strong: oklch(39% 0.07 156);
+
+  --ink: oklch(93% 0.018 128);
+  --ink-soft: oklch(77% 0.025 138);
+  --ink-faint: oklch(62% 0.03 145);
+
+  --brand: oklch(70% 0.11 152);
+  --brand-strong: oklch(79% 0.12 150);
+  --brand-soft: oklch(62% 0.09 152);
+  --brand-wash: oklch(25% 0.06 156);
+  --brand-contrast: oklch(13% 0.035 156);
+  --accent: oklch(74% 0.14 78);
+  --accent-wash: oklch(27% 0.06 82);
+
+  --leak: oklch(70% 0.14 34);
+  --leak-wash: oklch(25% 0.055 34);
+  --defend: oklch(69% 0.12 158);
+  --defend-wash: oklch(24% 0.06 156);
+  --reclaim: oklch(72% 0.105 235);
+  --reclaim-wash: oklch(25% 0.055 235);
+
+  --shadow-card: 0 1px 2px oklch(5% 0.02 156 / 0.25),
+                 0 18px 36px -20px oklch(5% 0.02 156 / 0.8);
 }
 
 @media (prefers-reduced-motion: reduce) {

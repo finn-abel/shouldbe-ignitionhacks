@@ -14,7 +14,7 @@ const TIERS = [
  * Rates are per role tier and blended by design — an individual's pay is not
  * representable in this shape, which is the point (doc 1's privacy stance).
  */
-export default function Settings({ onSaved }) {
+export default function Settings({ theme, onThemeChange, onSaved }) {
   const [rates, setRates] = useState(null);
   const [budget, setBudget] = useState('');
   const [status, setStatus] = useState(null);
@@ -83,6 +83,30 @@ export default function Settings({ onSaved }) {
 
   return (
     <form className="settings" onSubmit={save}>
+      <section className="panel settings__theme">
+        <div className="panel__head">
+          <h2>Appearance</h2>
+        </div>
+        <div className="theme-switch" role="group" aria-label="Theme">
+          <button
+            type="button"
+            className="theme-switch__option"
+            aria-pressed={theme === 'light'}
+            onClick={() => onThemeChange('light')}
+          >
+            Light
+          </button>
+          <button
+            type="button"
+            className="theme-switch__option"
+            aria-pressed={theme === 'dark'}
+            onClick={() => onThemeChange('dark')}
+          >
+            Dark
+          </button>
+        </div>
+      </section>
+
       <section className="panel">
         <div className="panel__head">
           <h2>Monthly meeting budget</h2>

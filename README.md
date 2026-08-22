@@ -7,6 +7,9 @@ drafts email alternatives.
 
 *Ignition Hacks V.7 · Fintech track*
 
+**Getting it running: [RUNBOOK.md](RUNBOOK.md)** — setup, commands, variables, and what to do
+when something breaks.
+
 ## Layout
 
 ```
@@ -27,7 +30,7 @@ python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env            # first time only
-PYTHONPATH=. python -m app.seed # seeds the shared guest with a month of meetings
+python -m app.seed              # seeds the shared guest with a month of meetings
 uvicorn app.main:app --reload --port 8000
 ```
 
@@ -61,8 +64,6 @@ Use `localhost`, not `127.0.0.1` — the Vite dev server binds IPv6 loopback.
 cd backend && ./venv/bin/pytest
 ```
 
-One-off scripts against the app package need the same path: `PYTHONPATH=. ./venv/bin/python script.py`.
-
 CI runs the same tests, boots the backend to check `/health`, and builds the frontend —
 on pushes to `main` and on pull requests into it. See `.github/workflows/ci.yml`.
 
@@ -73,7 +74,7 @@ in `LLM_API_KEY`, validate it in isolation first, then flip the stub off:
 
 ```bash
 cd backend
-LLM_API_KEY=sk-... PYTHONPATH=. ./venv/bin/python spike_llm.py   # one call, prints the analysis
+LLM_API_KEY=sk-... ./venv/bin/python spike_llm.py   # one call, prints the analysis
 SHOULDBE_USE_STUB=0 ./venv/bin/uvicorn app.main:app --reload --port 8000
 ```
 
@@ -88,7 +89,7 @@ configured the webhook still parses, scores and records the invite — it just s
 To exercise the same path from a saved `.ics` with no email at all:
 
 ```bash
-cd backend && PYTHONPATH=. ./venv/bin/python -m app.services.ics_adapter invite.ics you@yourdomain
+cd backend && ./venv/bin/python -m app.services.ics_adapter invite.ics you@yourdomain
 ```
 
 ## Environment

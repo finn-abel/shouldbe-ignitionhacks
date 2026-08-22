@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="164" height="44" viewBox="0 0 164 44" role="img" aria-labelledby="title">
+  <title id="title">ShouldBe</title>
+  <path d="M17 13.8c0-3 2.4-5.4 5.4-5.4h13.2c3 0 5.4 2.4 5.4 5.4v16.4c0 3-2.4 5.4-5.4 5.4H22.4c-3 0-5.4-2.4-5.4-5.4V13.8Z" fill="#f6f1dc"/>
+  <path d="M22.7 22.6 27.2 27 36 17.7" fill="none" stroke="#d99a18" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M23.5 14.8h11" stroke="#103d2a" stroke-width="2.2" stroke-linecap="round"/>
+  <path d="M23.5 19h6.8" stroke="#103d2a" stroke-width="2.2" stroke-linecap="round"/>
+  <text x="52" y="28.4" fill="#f8f5e7" font-family="Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="22" font-weight="750" letter-spacing=".1">ShouldBe</text>
+</svg>

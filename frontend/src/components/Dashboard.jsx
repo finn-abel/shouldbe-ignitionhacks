@@ -107,38 +107,40 @@ export default function Dashboard({ refreshKey }) {
         )}
       </section>
 
-      <div className="tiles__head">
-        <p className="eyebrow">
-          {period === 'month' ? 'This month' : 'All time'} — spend and savings
-        </p>
-        <div className="chips">
-          {PERIODS.map(({ key, label }) => (
-            <button
-              key={key}
-              type="button"
-              className="chip"
-              aria-pressed={period === key}
-              onClick={() => setPeriod(key)}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <section className={`tiles ${converting ? 'tiles--settling' : ''}`}>
-        <div className="tile tile--total">
-          <p className="tile__label">Total spend</p>
-          <p className="tile__figure figure">{formatMoney(stats.total_spend)}</p>
-          <p className="tile__note">every meeting that happened</p>
-        </div>
-        {TILES.map(({ key, label, note, tone }) => (
-          <div className={`tile tile--${tone}`} key={key}>
-            <p className="tile__label">{label}</p>
-            <p className="tile__figure figure">{formatMoney(stats[key])}</p>
-            <p className="tile__note">{note}</p>
+      <section className="money">
+        <div className="tiles__head">
+          <p className="eyebrow">
+            {period === 'month' ? 'This month' : 'All time'} — spend and savings
+          </p>
+          <div className="chips">
+            {PERIODS.map(({ key, label }) => (
+              <button
+                key={key}
+                type="button"
+                className="chip"
+                aria-pressed={period === key}
+                onClick={() => setPeriod(key)}
+              >
+                {label}
+              </button>
+            ))}
           </div>
-        ))}
+        </div>
+
+        <section className={`tiles ${converting ? 'tiles--settling' : ''}`}>
+          <div className="tile tile--total">
+            <p className="tile__label">Total spend</p>
+            <p className="tile__figure figure">{formatMoney(stats.total_spend)}</p>
+            <p className="tile__note">every meeting that happened</p>
+          </div>
+          {TILES.map(({ key, label, note, tone }) => (
+            <div className={`tile tile--${tone}`} key={key}>
+              <p className="tile__label">{label}</p>
+              <p className="tile__figure figure">{formatMoney(stats[key])}</p>
+              <p className="tile__note">{note}</p>
+            </div>
+          ))}
+        </section>
       </section>
 
       <section className="panel">

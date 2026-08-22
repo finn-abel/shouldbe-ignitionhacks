@@ -49,7 +49,7 @@ export default function Ledger({ meetings, onConvert, converting }) {
               onClick={() => setOpenId(isOpen ? null : meeting.id)}
             >
               <span className="entry__title">
-                {meeting.title}
+                <span className="entry__name">{meeting.title}</span>
                 {isWorst && <span className="entry__flag">worst offender</span>}
               </span>
 
