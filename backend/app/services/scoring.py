@@ -10,11 +10,25 @@ individual-level data. `score_meeting` is otherwise pure — no DB, no HTTP.
 """
 
 import json
+import logging
 import os
 import re
 from decimal import Decimal
 
 from app.enums import Verdict
+
+logger = logging.getLogger(__name__)
+
+# Model string taken from the current provider reference, not from memory — a stale
+# identifier is a silent failure (doc 4 task 4-E).
+LLM_MODEL = "claude-opus-5"
+
+# Enough room for the reasoning plus a drafted email, with margin.
+LLM_MAX_TOKENS = 4000
+
+# This is a short classification with a short piece of writing attached, not a research
+# task. Medium keeps the interactive Door B path responsive.
+LLM_EFFORT = "medium"
 
 # Score bands. The rubric deliberately *defends* necessary meetings (doc 1 §70), so an
 # honestly ambiguous meeting keeps its slot rather than being flagged.
@@ -166,12 +180,41 @@ def _stub_response(
     )
 
 
+def _api_key() -> str | None:
+    """Doc 4 names LLM_API_KEY; the SDK's own variable is accepted as well."""
+    return os.getenv("LLM_API_KEY") or os.getenv("ANTHROPIC_API_KEY") or None
+
+
 def _call_llm(prompt: str) -> str:
-    """The seam (doc 2 §8). Stub by default; the real provider is wired in at step 12."""
-    raise NotImplementedError(
-        "The real LLM provider is wired in at step 12. Set SHOULDBE_USE_STUB=1 to use "
-        "the offline stub."
+    """The seam (doc 2 §8) — the only function that changes between stub and provider.
+
+    Returns the model's raw text. Everything downstream parses that text and never
+    learns which branch produced it.
+    """
+    import anthropic  # imported lazily so the stub path needs no SDK at all
+
+    key = _api_key()
+    if not key:
+        raise RuntimeError(
+            "SHOULDBE_USE_STUB is off but no LLM_API_KEY is set. Set a key, or set "
+            "SHOULDBE_USE_STUB=1 to score offline."
+        )
+
+    client = anthropic.Anthropic(api_key=key)
+    response = client.messages.create(
+        model=LLM_MODEL,
+        max_tokens=LLM_MAX_TOKENS,
+        output_config={"effort": LLM_EFFORT},
+        messages=[{"role": "user", "content": prompt}],
     )
+
+    if response.stop_reason == "refusal":
+        # Handled like any other unusable answer: the parser returns a neutral keep.
+        logger.warning("The model declined to score this meeting.")
+        return ""
+
+    # Skip thinking blocks; only the text blocks carry the JSON.
+    return "".join(block.text for block in response.content if block.type == "text")
 
 
 def _strip_fences(raw: str) -> str:
@@ -269,14 +312,27 @@ def score_meeting(
     )
 
     if _stub_enabled():
-        raw = _stub_response(
-            title=title,
-            description=description,
-            duration_minutes=duration_minutes,
-            attendee_count=attendee_count,
-            is_recurring=is_recurring,
+        return _parse_analysis(
+            _stub_response(
+                title=title,
+                description=description,
+                duration_minutes=duration_minutes,
+                attendee_count=attendee_count,
+                is_recurring=is_recurring,
+            )
         )
-    else:
+
+    try:
         raw = _call_llm(prompt)
+    except Exception:
+        # A missing key, a rate limit, a network drop: the meeting still gets costed and
+        # recorded with a neutral verdict rather than failing the whole request. Logged
+        # in full server-side; the user sees a plain sentence. Flipping SHOULDBE_USE_STUB
+        # back on is the instant recovery (doc 4 task 4-E).
+        logger.exception("Necessity scoring failed; falling back to a neutral verdict.")
+        return _neutral_keep(
+            "The necessity analysis could not be completed, so this meeting is left on "
+            "the calendar. Re-run the analysis to get a verdict."
+        )
 
     return _parse_analysis(raw)

@@ -62,6 +62,19 @@ One-off scripts against the app package need the same path: `PYTHONPATH=. ./venv
 CI runs the same tests, boots the backend to check `/health`, and builds the frontend —
 on pushes to `main` and on pull requests into it. See `.github/workflows/ci.yml`.
 
+## Real LLM scoring
+
+Everything runs offline on a deterministic stub by default. To use the real provider, put a key
+in `LLM_API_KEY`, validate it in isolation first, then flip the stub off:
+
+```bash
+cd backend
+LLM_API_KEY=sk-... PYTHONPATH=. ./venv/bin/python spike_llm.py   # one call, prints the analysis
+SHOULDBE_USE_STUB=0 ./venv/bin/uvicorn app.main:app --reload --port 8000
+```
+
+If the provider errors mid-demo, set `SHOULDBE_USE_STUB=1` and restart — the stub is never removed.
+
 ## Environment
 
 Both services read a local `.env` (git-ignored); `.env.example` is the committed template.

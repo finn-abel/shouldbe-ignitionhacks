@@ -18,6 +18,8 @@ httpx          # FastAPI TestClient dependency
 authlib               # Google OAuth (openid email profile scopes only)
 itsdangerous          # signs the session cookie
 
+# --- LLM scoring (step 12) ---
+anthropic             # provider SDK; only used when SHOULDBE_USE_STUB is off
+
 # --- NOT YET USED — added in the step that needs them ---
 # postmarker            # Postmark in/outbound    (step 13)
-# anthropic             # LLM provider SDK        (step 12)

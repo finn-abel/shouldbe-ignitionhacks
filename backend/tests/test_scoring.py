@@ -115,12 +115,81 @@ def test_stub_is_on_by_default(monkeypatch):
 
 
 @pytest.mark.parametrize("value", ["0", "false", "no", "off", ""])
-def test_switching_the_stub_off_reaches_the_real_seam(monkeypatch, value):
-    # Step 12 fills this in; until then the seam must be reached, not silently skipped.
+def test_switching_the_stub_off_reaches_the_real_provider(monkeypatch, value):
     monkeypatch.setenv("SHOULDBE_USE_STUB", value)
+    calls = []
+    monkeypatch.setattr(
+        scoring,
+        "_call_llm",
+        lambda prompt: calls.append(prompt)
+        or json.dumps(
+            {
+                "score": 2,
+                "verdict": "email",
+                "reasoning": "Status only.",
+                "alternative_email": "Subject: written update",
+            }
+        ),
+    )
 
-    with pytest.raises(NotImplementedError):
-        score_meeting(**STANDUP)
+    result = score_meeting(**STANDUP)
+
+    assert len(calls) == 1 and STANDUP["title"] in calls[0]
+    _assert_shape(result)
+    assert result["score"] == 2 and result["verdict"] == "email"
+
+
+def test_the_real_branch_is_never_reached_while_the_stub_is_on(monkeypatch):
+    monkeypatch.setenv("SHOULDBE_USE_STUB", "1")
+    monkeypatch.setattr(
+        scoring, "_call_llm", lambda prompt: pytest.fail("The stub must not call out.")
+    )
+
+    _assert_shape(score_meeting(**STANDUP))
+
+
+def test_a_missing_key_with_the_stub_off_says_so_plainly(monkeypatch):
+    monkeypatch.delenv("LLM_API_KEY", raising=False)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+
+    with pytest.raises(RuntimeError, match="SHOULDBE_USE_STUB"):
+        scoring._call_llm("anything")
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [
+        RuntimeError("no key configured"),
+        ConnectionError("network is down"),
+        Exception("rate limited"),
+    ],
+)
+def test_a_failing_provider_never_breaks_the_pipeline(monkeypatch, failure):
+    # A meeting must still be costed and recorded when scoring falls over mid-demo.
+    monkeypatch.setenv("SHOULDBE_USE_STUB", "0")
+
+    def explode(prompt):
+        raise failure
+
+    monkeypatch.setattr(scoring, "_call_llm", explode)
+
+    result = score_meeting(**STANDUP)
+
+    _assert_shape(result)
+    assert result["verdict"] == "keep"
+    assert result["score"] == scoring.SCORE_NEUTRAL_FALLBACK
+    assert "could not be completed" in result["reasoning"]
+
+
+def test_a_refusal_is_treated_as_an_unusable_answer(monkeypatch):
+    # _call_llm returns "" on stop_reason == "refusal".
+    monkeypatch.setenv("SHOULDBE_USE_STUB", "0")
+    monkeypatch.setattr(scoring, "_call_llm", lambda prompt: "")
+
+    result = score_meeting(**STANDUP)
+
+    _assert_shape(result)
+    assert result["verdict"] == "keep"
 
 
 def test_prompt_carries_the_rubric_the_facts_and_the_cost():
