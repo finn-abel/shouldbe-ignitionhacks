@@ -14,10 +14,20 @@ from app.schemas.api import MeetingAnalysis
 from app.services.money import reclaimed_by_converting
 
 
-def save_analysis(session: Session, user_id: int, analysis: MeetingAnalysis) -> Meeting:
-    """Write one analysis to the ledger as a costed transaction."""
+def save_analysis(
+    session: Session,
+    user_id: int,
+    analysis: MeetingAnalysis,
+    source_key: str | None = None,
+) -> Meeting:
+    """Write one analysis to the ledger as a costed transaction.
+
+    `source_key` identifies the invite a meeting came from, so a redelivered inbound
+    email cannot land twice. It is None for the manual form, which has no such notion.
+    """
     meeting = Meeting(
         user_id=user_id,
+        source_key=source_key,
         title=analysis.title,
         description=analysis.description,
         start=analysis.start,
@@ -41,6 +51,15 @@ def save_analysis(session: Session, user_id: int, analysis: MeetingAnalysis) -> 
     session.commit()
     session.refresh(meeting)
     return meeting
+
+
+def find_by_source_key(session: Session, user_id: int, source_key: str) -> Meeting | None:
+    """The meeting already recorded for this invite, if any."""
+    return session.scalar(
+        select(Meeting).where(
+            Meeting.user_id == user_id, Meeting.source_key == source_key
+        )
+    )
 
 
 def list_meetings(session: Session, user_id: int) -> list[Meeting]:

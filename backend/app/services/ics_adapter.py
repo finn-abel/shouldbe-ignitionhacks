@@ -146,6 +146,21 @@ def parse_ics(ics_text: str, exclude_emails: tuple[str, ...] = ()) -> "ParsedInv
     )
 
 
+def source_key_for(payload: dict, ics_text: str) -> str | None:
+    """A stable id for one inbound invite, used to make redelivery harmless.
+
+    The event's own UID is the best key: Postmark assigns a fresh MessageID to a
+    forwarded copy of the same invite, whereas the UID identifies the meeting itself.
+    MessageID is the fallback for an invite carrying no UID.
+    """
+    match = re.search(r"^UID:(.+)$", ics_text, re.M)
+    if match and match.group(1).strip():
+        return f"ics:{match.group(1).strip()}"
+
+    message_id = (payload.get("MessageID") or "").strip()
+    return f"postmark:{message_id}" if message_id else None
+
+
 def find_ics_text(payload: dict) -> str:
     """Pull the calendar part out of Postmark's parsed inbound JSON (doc 2 §5.2).
 

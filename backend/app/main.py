@@ -21,6 +21,13 @@ DEFAULT_FRONTEND_ORIGIN = "http://localhost:5173"
 DEFAULT_SESSION_SECRET = "dev-only-not-a-real-secret"
 
 
+def _env_flag(name: str, default: bool = False) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     init_db()
@@ -33,13 +40,18 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# The session cookie carries the acting user id (doc 2 §5.5). SameSite=lax so the
-# Google OAuth redirect back to the callback still carries it.
+# The session cookie carries the acting user id (doc 2 §5.5).
+#
+# `lax` is right locally, where the frontend and the API are both on localhost and so
+# count as the same site. Deployed they are not: a Render Static Site and a Render Web
+# Service are different hosts, and a SameSite=Lax cookie is NOT attached to a cross-site
+# XHR — every API call would come back 401. Set SESSION_COOKIE_SAMESITE=none and
+# SESSION_COOKIE_SECURE=true there (browsers require Secure whenever SameSite is None).
 app.add_middleware(
     SessionMiddleware,
     secret_key=os.getenv("SESSION_SECRET", DEFAULT_SESSION_SECRET),
-    same_site="lax",
-    https_only=False,
+    same_site=os.getenv("SESSION_COOKIE_SAMESITE", "lax").strip().lower(),
+    https_only=_env_flag("SESSION_COOKIE_SECURE", False),
 )
 
 app.add_middleware(

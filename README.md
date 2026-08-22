@@ -33,6 +33,10 @@ uvicorn app.main:app --reload --port 8000
 
 Re-run the seed any time to reset the guest's numbers before a demo.
 
+The project bootstraps its schema with create-all rather than migrations, so after a change
+to the models delete the local database and re-seed: `rm backend/shouldbe.db` then run the
+seed again.
+
 Verify: <http://localhost:8000/health> → `{"status":"ok"}`
 API docs: <http://localhost:8000/docs>
 
@@ -90,4 +94,9 @@ cd backend && PYTHONPATH=. ./venv/bin/python -m app.services.ics_adapter invite.
 ## Environment
 
 Both services read a local `.env` (git-ignored); `.env.example` is the committed template.
+
+**When you deploy**, set `SESSION_COOKIE_SAMESITE=none` and `SESSION_COOKIE_SECURE=true` on the
+backend. The frontend and API are the same site on localhost but not on Render, and a
+`SameSite=Lax` cookie is not sent cross-site — leave the defaults and every deployed API call
+answers 401.
 Full variable reference: `shouldbe-docs/shouldbe-04-dev-log.md`.

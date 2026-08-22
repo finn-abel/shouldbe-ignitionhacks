@@ -7,15 +7,21 @@ this hands it to the same `analyze()` every other door uses.
 import logging
 import os
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.data.db import get_session
-from app.data.meetings import save_analysis
+from app.data.meetings import find_by_source_key, save_analysis
 from app.data.tiers import get_tier_rates
 from app.data.users import get_or_create_guest
 from app.services.email import send_reply
-from app.services.ics_adapter import NoInviteFound, find_ics_text, parse_ics
+from app.services.ics_adapter import (
+    NoInviteFound,
+    find_ics_text,
+    parse_ics,
+    source_key_for,
+)
 from app.services.pipeline import analyze
 
 logger = logging.getLogger(__name__)
@@ -64,9 +70,18 @@ def _shouldbe_addresses(payload: dict) -> tuple[str, ...]:
 def inbound_email(
     payload: dict,
     request: Request,
+    background: BackgroundTasks,
     session: Session = Depends(get_session),
 ):
-    """Receive an invite, analyze it, record it, and reply to the organizer."""
+    """Receive an invite, analyze it, record it, and reply to the organizer.
+
+    Postmark redelivers an inbound message up to six times over ~51 minutes — on a
+    non-2xx, on a network failure, and on a timeout where this endpoint did the work but
+    answered too slowly. So this handler is idempotent by construction: the ledger row is
+    keyed on the invite, and the reply is only sent when a row was actually created.
+    Without that, one invite could put six identical meetings on the books and send six
+    identical emails to the organizer.
+    """
     _verify_caller(request)
 
     try:
@@ -80,9 +95,32 @@ def inbound_email(
 
     # Email-door meetings are attributed to the shared guest (doc 2 §5.2's known edge).
     owner = get_or_create_guest(session)
+    source_key = source_key_for(payload, ics_text)
+
+    if source_key:
+        already = find_by_source_key(session, owner.id, source_key)
+        if already is not None:
+            logger.info("Invite %s was already analyzed; not replying again.", source_key)
+            return {"status": "duplicate", "meeting_id": already.id, "reply": "skipped"}
+
     analysis = analyze(invite, get_tier_rates(session, owner.id))
-    meeting = save_analysis(session, owner.id, analysis)
 
-    replied = send_reply(analysis, invite.organizer_email)
+    try:
+        meeting = save_analysis(session, owner.id, analysis, source_key)
+    except IntegrityError:
+        # A retry that arrived while the first delivery was still being scored. The
+        # unique constraint is the real guarantee; the lookup above is just the fast path.
+        session.rollback()
+        already = find_by_source_key(session, owner.id, source_key) if source_key else None
+        logger.info("Concurrent redelivery of invite %s; kept the first.", source_key)
+        return {
+            "status": "duplicate",
+            "meeting_id": already.id if already else None,
+            "reply": "skipped",
+        }
 
-    return {"status": "analyzed", "meeting_id": meeting.id, "replied": replied}
+    # Reply after responding. Scoring plus an SMTP round trip is exactly the latency that
+    # trips Postmark's timeout and starts the redelivery loop this handler defends against.
+    background.add_task(send_reply, analysis, invite.organizer_email)
+
+    return {"status": "analyzed", "meeting_id": meeting.id, "reply": "queued"}

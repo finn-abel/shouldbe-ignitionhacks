@@ -32,19 +32,44 @@ export default function Settings({ onSaved }) {
     })();
   }, []);
 
+  /** A field holds a usable amount only if it is non-empty and a real number. */
+  const amountOf = (value) => {
+    const text = String(value ?? '').trim();
+    if (text === '') return null;
+    const amount = Number(text);
+    return Number.isFinite(amount) && amount >= 0 ? amount : null;
+  };
+
   const save = async (event) => {
     event.preventDefault();
     setError(null);
     setStatus(null);
+
+    // Every tier must carry a real rate. Coercing a blank to 0 would silently make a
+    // whole role free and understate every meeting priced afterwards.
+    const blankRate = TIERS.find(({ key }) => amountOf(rates[key]) === null);
+    if (blankRate) {
+      setError(`Give ${blankRate.label} an hourly rate before saving.`);
+      return;
+    }
+
+    // A blank budget means "not set", which is a different thing from a budget of zero:
+    // zero cannot be exceeded by a percentage and reads as permanently over budget. Leave
+    // it alone rather than writing a number the user never typed.
+    const monthlyAmount = amountOf(budget);
+    if (String(budget ?? '').trim() !== '' && monthlyAmount === null) {
+      setError('The monthly budget must be a positive amount.');
+      return;
+    }
+
     try {
-      const [savedRates] = await Promise.all([
-        updateTierRates(
-          Object.fromEntries(TIERS.map(({ key }) => [key, Number(rates[key]) || 0])),
-        ),
-        updateBudget(Number(budget) || 0),
-      ]);
+      const savedRates = await updateTierRates(
+        Object.fromEntries(TIERS.map(({ key }) => [key, amountOf(rates[key])])),
+      );
+      if (monthlyAmount !== null) await updateBudget(monthlyAmount);
+
       setRates(savedRates);
-      setStatus('Saved.');
+      setStatus(monthlyAmount === null ? 'Rates saved. No budget set.' : 'Saved.');
       onSaved?.();
     } catch (failure) {
       setError(failure.message);
@@ -65,6 +90,7 @@ export default function Settings({ onSaved }) {
         <label className="field">
           <span className="field__label">
             What this team should spend on meetings each month
+            <span className="field__hint">leave blank for no budget</span>
           </span>
           <div className="money-input">
             <span aria-hidden="true">$</span>

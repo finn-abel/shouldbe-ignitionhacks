@@ -20,7 +20,9 @@ from app.schemas.api import MeetingAnalysis
 logger = logging.getLogger(__name__)
 
 POSTMARK_SEND_URL = "https://api.postmarkapp.com/email"
-SEND_TIMEOUT_SECONDS = 15.0
+# Kept short: the reply now runs after the webhook has already responded, but a
+# hung connection should still release the worker promptly.
+SEND_TIMEOUT_SECONDS = 8.0
 
 
 def _money(amount) -> str:

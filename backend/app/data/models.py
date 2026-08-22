@@ -139,9 +139,18 @@ class Meeting(Base):
     """
 
     __tablename__ = "meetings"
+    __table_args__ = (
+        # Door A's at-most-once guarantee. Postmark redelivers an inbound message up to
+        # six times over ~51 minutes — including when the endpoint did the work but
+        # answered too slowly — so the database, not the handler, is what makes a repeat
+        # delivery harmless. Null for manual-form meetings, and SQL treats each NULL as
+        # distinct, so Door B is unconstrained.
+        UniqueConstraint("user_id", "source_key", name="uq_meeting_source_per_user"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    source_key: Mapped[str | None] = mapped_column(String(512), nullable=True)
 
     # --- invite facts (populated by whichever door's adapter) ---
     title: Mapped[str] = mapped_column(String(512), nullable=False)
