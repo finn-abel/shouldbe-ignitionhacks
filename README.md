@@ -7,9 +7,6 @@ drafts email alternatives.
 
 *Ignition Hacks V.7 · Fintech track*
 
-Design docs live in `shouldbe-docs/` (overview, architecture, build plan, dev log).
-The architecture doc is the source of truth for structure.
-
 ## Layout
 
 ```

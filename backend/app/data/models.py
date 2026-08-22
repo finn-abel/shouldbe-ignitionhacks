@@ -19,9 +19,39 @@ from sqlalchemy import (
     UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.types import TypeDecorator
 
 from app.data.db import Base
 from app.enums import Status, Tier, Verdict
+
+class UtcDateTime(TypeDecorator):
+    """Timestamps that are UTC-aware on the way in and on the way out, on any dialect.
+
+    Postgres returns an aware datetime from a `timestamptz` column; SQLite has no
+    timezone storage and hands back a naive one. Left alone, that divergence means code
+    comparing a stored timestamp against `datetime.now(timezone.utc)` works in the cloud
+    and raises "can't compare offset-naive and offset-aware datetimes" locally — the
+    exact class of SQLite/Postgres surprise doc 4 task 4-B warns about. The burn-rate
+    bucketing and the current-month budget comparison both do that comparison.
+    """
+
+    impl = DateTime(timezone=True)
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value.astimezone(timezone.utc)
+
+    def process_result_value(self, value, dialect):
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value.astimezone(timezone.utc)
+
 
 # Money is stored at cent precision. Postgres enforces this; SQLite is lax about it
 # (doc 4 task 4-B) — keep the column type authoritative rather than the dialect.
@@ -60,9 +90,7 @@ class User(Base):
     display_name: Mapped[str] = mapped_column(String(255), nullable=False)
     google_sub: Mapped[str | None] = mapped_column(String(255), nullable=True, unique=True)
     is_guest: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=_utcnow
-    )
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime, nullable=False, default=_utcnow)
 
     tier_rates: Mapped[list["RoleTierRate"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
@@ -118,7 +146,7 @@ class Meeting(Base):
     # --- invite facts (populated by whichever door's adapter) ---
     title: Mapped[str] = mapped_column(String(512), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False, default="")
-    start: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    start: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True)
     duration_minutes: Mapped[int] = mapped_column(
         Integer, nullable=False, default=DEFAULT_DURATION_MINUTES
     )
@@ -141,8 +169,6 @@ class Meeting(Base):
     # --- lifecycle / money state ---
     status: Mapped[Status] = _enum_column(Status, nullable=False, default=Status.ANALYZED)
     reclaimed_savings: Mapped[float] = mapped_column(MONEY, nullable=False, default=0)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=_utcnow, index=True
-    )
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime, nullable=False, default=_utcnow, index=True)
 
     user: Mapped[User] = relationship(back_populates="meetings")

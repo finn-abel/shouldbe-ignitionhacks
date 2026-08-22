@@ -6,7 +6,7 @@ ORM models never leave an endpoint; these are what the API actually returns.
 from datetime import datetime
 from decimal import Decimal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from app.enums import Status, Tier, Verdict
 
@@ -42,3 +42,12 @@ class MeetingAnalysis(BaseModel):
     # --- lifecycle / money state ---
     status: Status
     reclaimed_savings: Decimal
+
+
+class MeetingRead(MeetingAnalysis):
+    """A saved ledger row. The analysis, plus the two fields persistence assigns."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    created_at: datetime

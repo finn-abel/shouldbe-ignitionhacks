@@ -29,6 +29,12 @@ class Base(DeclarativeBase):
     """Declarative base for every ORM entity in doc 2 §4."""
 
 
+def get_session():
+    """FastAPI dependency: one session per request, always closed."""
+    with SessionLocal() as session:
+        yield session
+
+
 def init_db():
     """Create any missing tables. Imported models register themselves on Base.metadata."""
     from app.data import models  # noqa: F401  (import registers the mappings)
