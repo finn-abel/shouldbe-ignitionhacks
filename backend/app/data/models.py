@@ -1,11 +1,10 @@
-"""ORM entities exactly per doc 2 §4, plus the shared enums the services layer imports.
+"""ORM entities exactly per doc 2 §4 — persistence only.
 
-Layering runs routes -> services -> data (doc 2 §3.1), so services importing these enum
-definitions goes with the grain. The enums carry no persistence behaviour of their own.
+The shared enums live in `app/enums.py` so the pure services can use the same vocabulary
+without importing the database layer.
 """
 
 from datetime import datetime, timezone
-from enum import Enum
 
 from sqlalchemy import (
     JSON,
@@ -22,41 +21,13 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.data.db import Base
+from app.enums import Status, Tier, Verdict
 
 # Money is stored at cent precision. Postgres enforces this; SQLite is lax about it
 # (doc 4 task 4-B) — keep the column type authoritative rather than the dialect.
 MONEY = Numeric(12, 2)
 
 DEFAULT_DURATION_MINUTES = 60
-
-
-class Tier(Enum):
-    """Role tier — the privacy-preserving cost basis (doc 2 §4.2)."""
-
-    IC = "ic"
-    SENIOR = "senior"
-    MANAGER = "manager"
-    EXEC = "exec"
-
-
-class Verdict(Enum):
-    """Necessity call (doc 2 §4.4). KEEP = genuine live need; EMAIL = could be async."""
-
-    KEEP = "keep"
-    EMAIL = "email"
-
-
-class Status(Enum):
-    """Lifecycle / money state (doc 2 §6).
-
-    ANALYZED  — default; the meeting is on the books as spend.
-    HELD      — explicitly kept, whether necessary or unnecessary-but-not-converted.
-    CONVERTED — swapped for an email; contributes to reclaimed savings, not spend.
-    """
-
-    ANALYZED = "analyzed"
-    HELD = "held"
-    CONVERTED = "converted"
 
 
 def _enum_column(enum_cls, **kwargs):
