@@ -7,21 +7,21 @@ uvicorn[standard]==0.52.4
 pydantic==2.13.4
 python-dotenv==1.2.3
 
-# --- persistence (step 1) ---
+# --- persistence ---
 sqlalchemy==2.0.52
 psycopg2-binary==2.9.11   # Postgres driver. Unused on SQLite; required on Render.
 
-# --- .ics parsing (step 4 / Door C) ---
+# --- .ics parsing ---
 ics==0.7.3
 
 # --- tests ---
 pytest==9.1.1
 httpx==0.28.1          # FastAPI TestClient dependency
 
-# --- auth (step 11) ---
+# --- auth ---
 authlib==1.7.2         # Google OAuth (openid email profile scopes only)
 itsdangerous==2.2.0    # signs the session cookie
 
-# --- LLM scoring (step 12) ---
+# --- LLM scoring ---
 openai==3.3.1          # default real scoring provider
 anthropic==1.0.0       # provider SDK; only used when SHOULDBE_USE_STUB is off

@@ -1,4 +1,4 @@
-"""Door B — analyze a meeting and record it (doc 2 §5.1). Thin: parse, delegate, return."""
+"""Analyze a meeting and record it. Thin: parse, delegate, return."""
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
@@ -32,13 +32,14 @@ def analyze_meeting(
     user: User = Depends(acting_user),
 ):
     # Priced with this user's own tier rates, so editing them changes what new meetings
-    # cost (doc 3 step 9). Meetings already on the books keep the cost they were priced
-    # at — a ledger records what happened.
+    # cost. Meetings already on the books keep the cost they were priced at — a ledger
+    # records what happened.
     rates = get_tier_rates(session, user.id)
     analysis = analyze(form.to_parsed_invite(), rates)
-    # Door B names no addresses — it asks for head counts per tier — so every seat here is
-    # known by construction and there is nobody to identify later. The directory is passed
-    # anyway so the "was this a guess?" question has one answer on every door.
+    # The manual form names no addresses — it asks for head counts per tier — so every
+    # seat here is known by construction and there is nobody to identify later. The
+    # directory is passed anyway so the "was this a guess?" question has one answer
+    # everywhere.
     return save_analysis(
         session,
         user.id,

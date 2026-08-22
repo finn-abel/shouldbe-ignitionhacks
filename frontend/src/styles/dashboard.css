@@ -746,17 +746,6 @@
   white-space: nowrap;
 }
 
-.settings-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
-  gap: var(--gap);
-  align-items: stretch;
-}
-
-.settings-grid .panel {
-  justify-content: space-between;
-}
-
 .money-input {
   display: flex;
   align-items: center;
@@ -1010,7 +999,6 @@
 
 @media (max-width: 66rem) {
   .settings-command,
-  .settings-grid,
   .settings__theme,
   .settings__basis {
     grid-template-columns: 1fr;

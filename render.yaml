@@ -96,7 +96,7 @@ services:
       - key: GOOGLE_CLIENT_SECRET
         sync: false
 
-      # Door A: Postmark receives invites, Resend sends replies. Independent of each
+      # Inbound email: Postmark receives invites, Resend sends replies. Independent of each
       # other, and both optional — unset, invites still parse and replies queue.
       - key: POSTMARK_TOKEN
         sync: false

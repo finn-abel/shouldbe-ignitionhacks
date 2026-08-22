@@ -1,6 +1,6 @@
 """Whose ledger does an emailed invite land on?
 
-Door A used to put every invite on the shared guest. Getting attribution wrong is not a
+Inbound invites used to land on the shared guest. Getting attribution wrong is not a
 cosmetic bug — it puts one person's meeting spend on another person's budget — so these
 are correctness tests. The freemail case is the sharpest: without it, a user who claims
 `gmail.com` captures every gmail organizer's invites.
@@ -203,7 +203,7 @@ def test_the_plus_addressed_shouldbe_inbox_is_not_billed_as_an_attendee():
 
     The inbox is excluded from attendee costs by comparing addresses. Once invites arrive
     tagged, an exact comparison stops matching, and ShouldBe silently bills itself as an
-    attendee on every meeting it is invited to — inflating every Door A cost.
+    attendee on every meeting it is invited to — inflating every inbound-invite cost.
     """
     ics = "\r\n".join([
         "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//T//EN", "BEGIN:VEVENT",

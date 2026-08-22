@@ -1,4 +1,4 @@
-"""ORM entities exactly per doc 2 §4 — persistence only.
+"""ORM entities — persistence only.
 
 The shared enums live in `app/enums.py` so the pure services can use the same vocabulary
 without importing the database layer.
@@ -32,7 +32,7 @@ class UtcDateTime(TypeDecorator):
     timezone storage and hands back a naive one. Left alone, that divergence means code
     comparing a stored timestamp against `datetime.now(timezone.utc)` works in the cloud
     and raises "can't compare offset-naive and offset-aware datetimes" locally — the
-    exact class of SQLite/Postgres surprise doc 4 task 4-B warns about. The burn-rate
+    exact class of SQLite/Postgres surprise this type is here to avoid. The burn-rate
     bucketing and the current-month budget comparison both do that comparison.
     """
 
@@ -54,8 +54,8 @@ class UtcDateTime(TypeDecorator):
         return value.astimezone(timezone.utc)
 
 
-# Money is stored at cent precision. Postgres enforces this; SQLite is lax about it
-# (doc 4 task 4-B) — keep the column type authoritative rather than the dialect.
+# Money is stored at cent precision. Postgres enforces this; SQLite is lax about it, so
+# keep the column type authoritative rather than the dialect.
 MONEY = Numeric(12, 2)
 
 DEFAULT_DURATION_MINUTES = 60
@@ -65,7 +65,7 @@ def _enum_column(enum_cls, **kwargs):
     """Portable enum column: VARCHAR + CHECK, storing the lowercase member *values*.
 
     Avoids Postgres native ENUM types, which need a migration to gain a value, and keeps
-    the stored strings identical to the ones doc 2 §4 names.
+    the stored strings identical to the API vocabulary.
     """
     return mapped_column(
         SAEnum(
@@ -134,7 +134,7 @@ class Person(Base):
 
     Still not individual compensation: a row says which *blended tier* a person is priced
     at, never what they are paid. The rate lives on `role_tier_rates`, shared by everyone
-    in the tier, so doc 1's privacy stance holds — this adds no number that is about one
+    in the tier, so the privacy stance holds — this adds no number that is about one
     person.
 
     Scoped per user, not global: two accounts may legitimately place the same colleague at
@@ -181,7 +181,7 @@ class MeetingAttendee(Base):
     )
     # Order is preserved so the seat list lines up with `Meeting.attendee_tiers`.
     position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    # "" for a manual-form seat: Door B asks for head counts per tier, not addresses, so
+    # "" for a manual-form seat: it asks for head counts per tier, not addresses, so
     # those seats are known-by-construction and have nobody to identify.
     email: Mapped[str] = mapped_column(String(320), nullable=False, default="", index=True)
     tier: Mapped[Tier] = _enum_column(Tier, nullable=False)
@@ -228,7 +228,7 @@ class ScopedBudget(Base):
 
 
 class Meeting(Base):
-    """The analysis record — every analyzed meeting from any door (§4.4).
+    """The analysis record — every analyzed meeting from any source.
 
     Meetings judged necessary are recorded too: the ledger tracks all meeting spend, and
     the verdict is an attribute of the transaction, not a filter on what gets written.
@@ -236,11 +236,11 @@ class Meeting(Base):
 
     __tablename__ = "meetings"
     __table_args__ = (
-        # Door A's at-most-once guarantee. Postmark redelivers an inbound message up to
+        # Inbound email's at-most-once guarantee. Postmark redelivers an inbound message up to
         # six times over ~51 minutes — including when the endpoint did the work but
         # answered too slowly — so the database, not the handler, is what makes a repeat
         # delivery harmless. Null for manual-form meetings, and SQL treats each NULL as
-        # distinct, so Door B is unconstrained.
+        # distinct, so the manual form is unconstrained.
         UniqueConstraint("user_id", "source_key", name="uq_meeting_source_per_user"),
     )
 
@@ -248,7 +248,7 @@ class Meeting(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
     source_key: Mapped[str | None] = mapped_column(String(512), nullable=True)
 
-    # --- invite facts (populated by whichever door's adapter) ---
+    # --- invite facts (populated by whichever source adapter) ---
     title: Mapped[str] = mapped_column(String(512), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False, default="")
     start: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True)
@@ -298,9 +298,9 @@ class Meeting(Base):
 
 
 class InboundRoute(Base):
-    """How an emailed invite finds its owner (doc 2 §5.2's "known edge", closed).
+    """How an emailed invite finds its owner.
 
-    Door A used to attribute every invite to the shared guest, because an inbound email
+    Inbound invites used to land on the shared guest, because an inbound email
     carries no session. This row is what an invite is matched against instead. One per
     user, created lazily so an existing database gains routing without a re-seed.
 

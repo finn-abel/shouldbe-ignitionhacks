@@ -1,4 +1,4 @@
-"""Outbound reply persistence — the transactional outbox (doc 2 §5.2).
+"""Outbound reply persistence — the transactional outbox.
 
 The important call is `enqueue_with_meeting`: the reply row is written in the *same*
 commit as its meeting. Anything less reintroduces the failure this table exists to remove,

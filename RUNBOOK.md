@@ -62,7 +62,7 @@ The rest of `.env` is for deployment and can stay empty.
 | Variable | Default | Change it when |
 |---|---|---|
 | `SHOULDBE_USE_STUB` | `1` | You have an LLM key and want real scoring — set `0` |
-| `LLM_API_KEY` | *(empty)* | Same. Validate it first: `python spike_llm.py` |
+| `LLM_API_KEY` | *(empty)* | Same. Leave blank for the deterministic scoring stub |
 | `SHOULDBE_TIMEZONE` | `America/Toronto` | You are demoing from another timezone |
 | `SHOULDBE_MAX_BILLABLE_MINUTES` | `480` | You want a different per-meeting billing cap |
 | `DATABASE_URL` | `sqlite:///./shouldbe.db` | Pointing at Postgres |
@@ -93,7 +93,6 @@ cd backend && source venv/bin/activate
 pytest -q                                     # 222 tests, ~1s
 python -m app.seed                            # reset the guest's numbers before a demo
 python -m app.services.ics_adapter file.ics   # score a saved .ics, no email needed
-python spike_llm.py                           # one real LLM call, needs LLM_API_KEY
 ```
 
 ```bash

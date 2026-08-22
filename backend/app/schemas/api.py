@@ -1,4 +1,4 @@
-"""API response schemas (doc 2 §3.2, §3.5).
+"""API response schemas.
 
 ORM models never leave an endpoint; these are what the API actually returns.
 """
@@ -14,10 +14,10 @@ from app.enums import BudgetScope, OutboxStatus, Status, Tier, Verdict
 
 
 class MeetingAnalysis(BaseModel):
-    """The analysis record — what `analyze()` produces (doc 2 §4.4).
+    """The analysis record — what `analyze()` produces.
 
     Carries every field of a `Meeting` except the persistence ones (`id`, `user_id`,
-    `created_at`), which the ledger assigns when the analysis is saved in step 5.
+    `created_at`), which the ledger assigns when the analysis is saved.
     """
 
     # --- invite facts ---
@@ -84,7 +84,7 @@ class SpendBucket(BaseModel):
 
 
 class BudgetComparison(BaseModel):
-    """Current-month spend against the user's budget (doc 2 §6).
+    """Current-month spend against the user's budget.
 
     `monthly_amount` and the two derived figures are null when the user has no budget set
     — a missing budget is not the same as a zero one.
@@ -169,7 +169,7 @@ class BudgetGuardrailRead(BaseModel):
 class TierRates(RootModel[dict[Tier, Decimal]]):
     """The four blended role-tier rates, keyed by tier.
 
-    Blended rates only — doc 1's privacy stance means an individual salary must never be
+    Blended rates only — the privacy stance means an individual salary must never be
     representable here, and a per-person shape would make it representable.
     """
 
@@ -186,7 +186,7 @@ class TierRates(RootModel[dict[Tier, Decimal]]):
 
 
 class MeetingStatusUpdate(BaseModel):
-    """The convert transition (doc 2 §5.4). Only `converted` is offered by this step."""
+    """The convert transition. Only `converted` is offered here."""
 
     status: Status
 
@@ -204,7 +204,7 @@ class MeetingStatusUpdate(BaseModel):
 
 
 class UserRead(BaseModel):
-    """Who the request is acting as (doc 2 §4.1)."""
+    """Who the request is acting as."""
 
     model_config = ConfigDict(from_attributes=True)
 

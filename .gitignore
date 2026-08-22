@@ -144,7 +144,7 @@ vite.config.ts.timestamp-*
 
 shouldbe-docs
 
-# ShouldBe — local dev (task 4-A)
+# ShouldBe — local dev
 venv/
 .venv/
 *.db

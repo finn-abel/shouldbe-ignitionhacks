@@ -1,7 +1,7 @@
-"""Outbound email (doc 2 §5.2).
+"""Outbound email.
 
-Composing the reply is a pure function; sending it is one JSON POST. Two rules from
-doc 1 §59-61 shape what goes in the message:
+Composing the reply is a pure function; sending it is one JSON POST. Two privacy rules
+shape what goes in the message:
 
 - **Aggregate figures only.** The reply names what the meeting costs in total. It never
   names a person, a role rate, or anyone's share.

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { getInboundRoute, setInboundDomain } from '../api/client.js';
 
 /**
- * Door A's front end (doc 2 §5.2): the address to invite ShouldBe from.
+ * The address to invite ShouldBe from.
  *
  * Two ways to be recognised, shown in the order most people need them:
  *

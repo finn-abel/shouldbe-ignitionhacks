@@ -74,13 +74,13 @@ def seats_for(
 
 
 def resolved_invite(invite, known: dict[str, Tier]):
-    """An invite priced against the directory — the one call every door should make.
+    """An invite priced against the directory — the shared path for every source.
 
     Returns the invite untouched when it names no addresses at all. That guard is the
-    whole reason this exists rather than each door calling `seats_for` itself: Door B
-    sends head counts and no addresses, and resolving `[]` into seats replaces a room of
-    fifteen people with a room of nobody. Every count-only meeting silently costs zero,
-    the ledger totals collapse, and nothing raises.
+    whole reason this exists rather than each source calling `seats_for` itself: the
+    manual form sends head counts and no addresses, and resolving `[]` into seats replaces
+    a room of fifteen people with a room of nobody. Every count-only meeting silently
+    costs zero, the ledger totals collapse, and nothing raises.
     """
     if not invite.attendee_emails:
         return invite
@@ -88,7 +88,7 @@ def resolved_invite(invite, known: dict[str, Tier]):
 
 
 def counted_seats(count: int, tiers: list[Tier]) -> list[Seat]:
-    """Door B's seats: head counts per tier, so nobody to identify and nothing assumed.
+    """Manual-form seats: head counts per tier, so nobody to identify and nothing assumed.
 
     The manual form asks how many people of each tier are in the room. Those tiers came
     from the user directly, which makes them known by construction — an anonymous seat is

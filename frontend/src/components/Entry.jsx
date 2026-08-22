@@ -26,7 +26,7 @@ const entrySignals = [
 ];
 
 /**
- * The two ways in (doc 2 §5.5). Guest is not a demo mode or a restricted tier — it
+ * The two ways in. Guest is not a demo mode or a restricted tier — it
  * resolves to a real, writable, pre-seeded user, and it needs no OAuth at all.
  */
 export default function Entry({ onGuest, pending, error }) {

@@ -1,13 +1,12 @@
-"""The four dollar concepts and the burn-rate series (doc 2 §6).
+"""The four dollar concepts and the burn-rate series.
 
 Pure functions over a user's ledger — no DB, no HTTP. They take `MeetingRead` rather than
 ORM rows so the money logic, like the cost math, can be tested without a database.
 
-**Converted meetings are not spend.** Doc 2 §6's derivation column shows total spend as a
-plain sum, but its prose is explicit that "spend is real money that happened" and that a
-`converted` meeting "contributes to reclaimed savings, not spend" — a meeting swapped for
-an email never happened, so its cost was never paid. Reading it the other way would leave
-a converted meeting counted as spend and as avoided money at the same time, and would mean
+**Converted meetings are not spend.** Spend is real money that happened, and a
+`converted` meeting contributes to reclaimed savings instead: a meeting swapped for an
+email never happened, so its cost was never paid. Reading it the other way would leave a
+converted meeting counted as spend and as avoided money at the same time, and would mean
 converting meetings never moves the over-budget headline the product exists to move.
 
 The reading gives a clean invariant the dashboard can rely on:
@@ -183,7 +182,7 @@ def budget_comparison(
     scope_type: BudgetScope = BudgetScope.USER,
     scope_name: str | None = None,
 ) -> BudgetComparison:
-    """This calendar month's spend against the monthly budget (doc 2 §6).
+    """This calendar month's spend against the monthly budget.
 
     "This month" means the month it is where the team is, not where the server is.
     """
@@ -307,7 +306,7 @@ def budget_guardrail(
 
 
 def reclaimed_by_converting(cost: Decimal) -> Decimal:
-    """What swapping a meeting for an email reclaims (doc 2 §5.4).
+    """What swapping a meeting for an email reclaims.
 
     The whole cost, because the meeting does not happen at all. Named and kept here with
     the other money rules rather than inlined at the call site: it is the one place that

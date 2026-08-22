@@ -1,4 +1,4 @@
-"""Entry: Google sign-in and guest (doc 2 §5.5). Thin: parse, delegate, return.
+"""Entry: Google sign-in and guest. Thin: parse, delegate, return.
 
 Also owns `acting_user`, the dependency every other router uses to resolve the session
 to a `User`. It lives here because the session *is* the auth concern; the routes that
@@ -23,7 +23,7 @@ SESSION_USER_KEY = "user_id"
 GOOGLE_DISCOVERY = "https://accounts.google.com/.well-known/openid-configuration"
 
 # Basic profile only — deliberately NOT calendar. These scopes are not sensitive, so
-# Google requires no verification review and shows no "unverified app" wall (doc 4 4-D).
+# Google requires no verification review and shows no "unverified app" wall.
 GOOGLE_SCOPES = "openid email profile"
 
 

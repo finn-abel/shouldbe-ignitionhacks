@@ -193,9 +193,9 @@
 
 .analysis-rail {
   display: grid;
-  grid-template-columns: repeat(3, minmax(4.5rem, 1fr));
+  grid-template-columns: repeat(3, minmax(8rem, 1fr));
   gap: 1px;
-  min-width: 17rem;
+  min-width: min(28rem, 100%);
   margin: 0;
   border: 1px solid var(--rule);
   border-radius: var(--radius-card);
@@ -213,8 +213,7 @@
 
 .analysis-rail dt {
   color: var(--brand);
-  font-family: var(--mono);
-  font-size: var(--text-lg);
+  font-size: var(--text-base);
   font-weight: 720;
   line-height: 1;
 }
@@ -223,9 +222,9 @@
   margin: 0;
   color: var(--ink-soft);
   font-size: var(--text-xs);
-  font-weight: 680;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  font-weight: 560;
+  letter-spacing: 0;
+  line-height: 1.35;
 }
 
 .analysis-page .workbench {
@@ -608,25 +607,25 @@
   font-size: var(--text-sm);
 }
 
-.result__empty-steps {
+.result__empty-summary {
   display: grid;
   gap: var(--gap-hair);
   margin: 0;
 }
 
-.result__empty-steps div {
+.result__empty-summary div {
   padding: 0.65rem 0.75rem;
   border-left: 2px solid var(--brand);
   background: color-mix(in oklch, var(--paper-raised) 86%, transparent);
 }
 
-.result__empty-steps dt {
+.result__empty-summary dt {
   color: var(--ink);
   font-size: var(--text-sm);
   font-weight: 680;
 }
 
-.result__empty-steps dd {
+.result__empty-summary dd {
   margin: 0.1rem 0 0;
   color: var(--ink-faint);
   font-size: var(--text-xs);

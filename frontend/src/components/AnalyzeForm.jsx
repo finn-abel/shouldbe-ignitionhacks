@@ -31,7 +31,7 @@ const EMPTY = {
 const EMPTY_ATTENDEES = { ic: 8, senior: 0, manager: 1, exec: 0 };
 
 /**
- * Door B — the manual form (doc 2 §5.1). It only collects and submits: the cost is
+ * The manual form only collects and submits: the cost is
  * computed by the backend and never duplicated here, so the number on screen is always
  * the number in the ledger.
  */

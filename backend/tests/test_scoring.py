@@ -1,4 +1,4 @@
-"""Scoring seam tests (doc 3 step 3).
+"""Scoring seam tests.
 
 Deliberately narrow, per the light testing stance: the stub's exact wording is not
 pinned, but two things are. The **seam** must honour SHOULDBE_USE_STUB, and the
@@ -53,7 +53,7 @@ def _assert_shape(result):
     assert result["analysis_notice"] is None or isinstance(result["analysis_notice"], str)
     assert result["analysis_error_code"] is None or isinstance(result["analysis_error_code"], str)
     assert (result["analysis_notice"] is None) == (result["analysis_error_code"] is None)
-    # §4.4: a drafted email exists exactly when the verdict says the meeting is avoidable.
+    # A drafted email exists exactly when the verdict says the meeting is avoidable.
     assert (result["alternative_email"] is None) == (result["verdict"] == "keep")
 
 
@@ -67,7 +67,7 @@ def test_standup_is_flagged_as_avoidable(monkeypatch):
 
     _assert_shape(result)
     assert result["verdict"] == "email"
-    assert result["score"] == 3  # doc 1's demo arc: recurring standup at 3/10
+    assert result["score"] == 3  # recurring standup at 3/10
 
 
 def test_decision_meeting_is_defended(monkeypatch):

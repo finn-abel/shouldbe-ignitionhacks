@@ -1,4 +1,4 @@
-"""The meeting ledger and its money figures (doc 2 §4.4, §6).
+"""The meeting ledger and its money figures.
 
 Thin: parse, delegate, return. Every dollar figure is computed in services/money.py.
 """

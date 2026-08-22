@@ -1,4 +1,4 @@
-"""Engine, session factory, and the create-all bootstrap (doc 2 §3.5, doc 4 task 4-B).
+"""Engine, session factory, and the create-all bootstrap.
 
 The database URL comes from the environment, so SQLite locally and Render Postgres in
 the cloud are the same code path — a config change, not a code change.
@@ -49,7 +49,7 @@ SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False
 
 
 class Base(DeclarativeBase):
-    """Declarative base for every ORM entity in doc 2 §4."""
+    """Declarative base for every ORM entity."""
 
 
 def get_session():
