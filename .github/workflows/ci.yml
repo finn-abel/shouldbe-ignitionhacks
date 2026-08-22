@@ -1,0 +1,71 @@
+name: CI
+
+# Only on the default branch and on pull requests targeting it — no runs on
+# feature-branch pushes, which during a hackathon are constant.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# A new push to a PR supersedes the run already in flight.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend — tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run tests
+        run: pytest -q
+
+      - name: Boot the app and check /health
+        # The money logic being green is not the same as the service being runnable.
+        # No .env in CI, so this also proves the defaults hold on a bare checkout.
+        run: |
+          uvicorn app.main:app --port 8000 &
+          for _ in $(seq 1 40); do
+            curl -fsS http://127.0.0.1:8000/health && break
+            sleep 0.5
+          done
+          curl -fsS http://127.0.0.1:8000/health | grep -q '"status":"ok"'
+
+  frontend:
+    name: Frontend — build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build

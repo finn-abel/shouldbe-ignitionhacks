@@ -1,5 +1,7 @@
 # ShouldBe
 
+[![CI](https://github.com/finn-abel/shouldbe-ignitionhacks/actions/workflows/ci.yml/badge.svg)](https://github.com/finn-abel/shouldbe-ignitionhacks/actions/workflows/ci.yml)
+
 Meeting spend management — scores meetings for necessity, computes their dollar cost, and
 drafts email alternatives.
 
@@ -53,6 +55,9 @@ cd backend && ./venv/bin/pytest
 ```
 
 One-off scripts against the app package need the same path: `PYTHONPATH=. ./venv/bin/python script.py`.
+
+CI runs the same tests, boots the backend to check `/health`, and builds the frontend —
+on pushes to `main` and on pull requests into it. See `.github/workflows/ci.yml`.
 
 ## Environment
 
