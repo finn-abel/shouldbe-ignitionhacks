@@ -79,15 +79,22 @@ def test_decision_meeting_is_defended(monkeypatch):
     assert result["verdict"] == "keep"
 
 
-def test_unrecognised_meeting_is_ambiguous_but_kept(monkeypatch):
-    # The rubric defends necessary meetings; no signal must not mean "flag it".
+def test_an_invite_that_shows_no_reason_to_be_live_is_not_defended(monkeypatch):
+    """A meeting called "Thursday" with no agenda has not made its case.
+
+    This asserted the opposite until the rubric was tightened — no signal meant a score of
+    6 and a keep. Almost no real invite carries a signal, so that default defended nearly
+    everything, which is how a spend tool ends up agreeing with every meeting it is shown.
+    Genuinely necessary meetings are defended by being recognised as necessary
+    (LIVE_SIGNALS), not by a generous fallback.
+    """
     monkeypatch.setenv("SHOULDBE_USE_STUB", "1")
 
     result = score_meeting(**{**DECISION, "title": "Thursday", "description": ""})
 
     _assert_shape(result)
-    assert result["verdict"] == "keep"
-    assert result["score"] == scoring.SCORE_AMBIGUOUS
+    assert result["verdict"] == "email"
+    assert result["score"] == scoring.SCORE_UNPROVEN
 
 
 def test_stub_is_deterministic(monkeypatch):
@@ -97,12 +104,19 @@ def test_stub_is_deterministic(monkeypatch):
 
 
 def test_async_keyword_does_not_fire_on_a_substring(monkeypatch):
-    # "sync" is a signal; "asynchronous" must not trip it.
+    """"sync" is a signal; "asynchronous" must not trip it.
+
+    Asserted against a title that also carries a live signal, so the two branches give
+    opposite answers: if "sync" fired inside "asynchronous" the async branch would win
+    (it is checked first) and this would be flagged. Written this way the test survives
+    any future change to how strict the unrecognised band is.
+    """
     monkeypatch.setenv("SHOULDBE_USE_STUB", "1")
 
-    result = score_meeting(**{**DECISION, "title": "Asynchronous handoff design"})
+    result = score_meeting(**{**DECISION, "title": "Asynchronous handoff decision"})
 
     assert result["verdict"] == "keep"
+    assert result["score"] == scoring.SCORE_CLEARLY_LIVE
 
 
 def test_drafted_email_never_mentions_money(monkeypatch):

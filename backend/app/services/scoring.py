@@ -62,11 +62,19 @@ MAX_PROMPT_DESCRIPTION_CHARS = 2_000
 # Sent to OpenAI as `reasoning.effort` and to Anthropic as `output_config.effort`.
 LLM_EFFORT = "low"
 
-# Score bands. The rubric deliberately *defends* necessary meetings (doc 1 §70), so an
-# honestly ambiguous meeting keeps its slot rather than being flagged.
+# The bands the stub's canned rubrics land in, named so tests can assert intent rather
+# than arithmetic.
+#
+# `SCORE_UNPROVEN` used to be `SCORE_AMBIGUOUS = 6` — a keep — on the reasoning that the
+# rubric should defend necessary meetings and no signal must not mean "flag it". In
+# practice almost nothing carries a signal, so that band defended nearly every real
+# invite and the tool agreed with whatever it was shown. The burden now sits with the
+# meeting: an invite that gives no evidence its work needs live time has not made its
+# case. Necessary meetings are still defended — by being *recognised* as necessary, which
+# is what widening LIVE_SIGNALS is for, not by a generous default.
 SCORE_RECURRING_ASYNC = 3
 SCORE_ASYNC = 4
-SCORE_AMBIGUOUS = 6
+SCORE_UNPROVEN = 4
 SCORE_CLEARLY_LIVE = 8
 SCORE_NEUTRAL_FALLBACK = 5
 
@@ -97,15 +105,35 @@ class ScoringProviderError(RuntimeError):
     def __str__(self) -> str:
         return self.user_message
 
+# The categories and weights are unchanged; the *anchors* are what got stricter.
+#
+# The old scale handed out its middle far too cheaply — "useful live alignment" scored a 5
+# on the heaviest category, and almost any meeting is usefully aligning to someone. A
+# rubric where the honest answer for an unremarkable meeting is 5-6 defends everything,
+# which makes the tool agreeable and useless. The rewrite moves the middle: 5 now means
+# "this could be written down and something small would be lost", which is where most
+# meetings genuinely sit, and 8+ has to be earned with evidence from the invite itself.
 RUBRIC_CATEGORIES = (
     {
         "key": "decision_pressure",
         "label": "Decision pressure",
         "weight": 35,
         "description": (
-            "Does the work need a live decision, unresolved disagreement, escalation, "
-            "or sensitive conversation? 0 = no decision; 5 = useful live alignment; "
-            "10 = live decision/debate is essential."
+            "Is a decision actually blocked without live time? "
+            "0 = nothing is being decided; "
+            "3 = a decision exists but one person could make it and write it up; "
+            "5 = a decision needs several people, and a written thread with a deadline "
+            "would reach it a little slower; "
+            "8 = there is stated disagreement, an escalation, or a sensitive conversation "
+            "that writing would handle badly; "
+            "10 = the decision cannot be made at all without people in the room together. "
+            "Score 8 or above only when the invite gives specific evidence of it. "
+            "One exception to the evidence rule, because it is a category error rather "
+            "than a close call: a one-to-one or small conversation about a person — a "
+            "1:1, skip-level, career or performance discussion, coaching, feedback, or "
+            "anything similar — scores at least 8 here on its face. The absence of a "
+            "decision is not evidence against those; the conversation *is* the work, and "
+            "writing handles it badly however clear the agenda would be."
         ),
     },
     {
@@ -113,9 +141,15 @@ RUBRIC_CATEGORIES = (
         "label": "Collaboration depth",
         "weight": 25,
         "description": (
-            "How much real back-and-forth, co-creation, or nuanced discussion is needed? "
-            "0 = people can read/update independently; 5 = some discussion helps; "
-            "10 = writing would be much slower or lower quality."
+            "Would the work actually be worse in writing? "
+            "0 = everyone can read and update independently; "
+            "3 = a document with comments covers it; "
+            "5 = discussion is more convenient live, but a document would get there — "
+            "this includes walking through, reviewing, or rehearsing an artifact that "
+            "already exists, because the artifact can be circulated and commented on; "
+            "8 = genuine co-creation — building or reworking something together where "
+            "each turn depends on the last; "
+            "10 = writing would lose the work, not just slow it down."
         ),
     },
     {
@@ -123,9 +157,13 @@ RUBRIC_CATEGORIES = (
         "label": "Interaction value",
         "weight": 20,
         "description": (
-            "Is the agenda multi-directional rather than one-way reporting? "
-            "0 = status/readout/FYI; 5 = mixed update and discussion; "
-            "10 = most value comes from live exchange."
+            "How much of the booked time is genuine two-way exchange? "
+            "0 = status, readout, FYI, or round-the-room updates; "
+            "3 = mostly reporting with questions at the end; "
+            "5 = about half the time is real discussion; "
+            "8 = most of the time is exchange that changes what people think; "
+            "10 = the whole point is the live exchange. "
+            "Round-the-room formats score low however senior the room is."
         ),
     },
     {
@@ -133,9 +171,15 @@ RUBRIC_CATEGORIES = (
         "label": "Meeting fit",
         "weight": 10,
         "description": (
-            "Is the meeting format tight for the goal? 0 = broad recurring sync, too many "
-            "attendees, or weak agenda; 5 = acceptable but not sharp; 10 = right people, "
-            "right cadence, clear live purpose."
+            "Is this the right shape for the goal? "
+            "0 = broad recurring sync, or a large room where most people are listening; "
+            "3 = more attendees or more cadence than the agenda justifies; "
+            "5 = reasonable, but not tight; "
+            "8 = the right few people, a clear agenda, no standing slot; "
+            "10 = could not be smaller or shorter and still work. "
+            "A standing recurring slot and a room where most attendees do not speak are "
+            "both evidence against fit. An invite with no stated agenda cannot score "
+            "above 3 here: an unstated agenda is an unjustified booking, not a tight one."
         ),
     },
     {
@@ -143,8 +187,15 @@ RUBRIC_CATEGORIES = (
         "label": "Business impact",
         "weight": 10,
         "description": (
-            "How important is immediate progress on this topic? 0 = low-stakes update; "
-            "5 = useful operational progress; 10 = urgent or high-consequence work."
+            "What is lost if this waits a week? "
+            "0 = nothing; a low-stakes update; "
+            "3 = mild inconvenience; "
+            "5 = ordinary operational progress slips; "
+            "8 = a commitment, customer, or deadline is at risk; "
+            "10 = urgent or high-consequence. "
+            "Routine work is a 5 however important the team is, and 8 or above requires "
+            "the invite to actually name the deadline, customer, or commitment at risk — "
+            "an important-sounding topic is not the same as something being at stake."
         ),
     },
 )
@@ -174,8 +225,19 @@ def _rubric_prompt() -> str:
         [
             "",
             f"Final score thresholds: {SCORE_MIN}-{EMAIL_SCORE_MAX} means it could be "
-            f"an email; {EMAIL_SCORE_MAX + 1}-{SCORE_MAX} means keep it live. Use the "
-            "middle carefully: ambiguous meetings should be kept rather than over-flagged.",
+            f"an email; {EMAIL_SCORE_MAX + 1}-{SCORE_MAX} means keep it live.",
+            # The old instruction here read "ambiguous meetings should be kept rather than
+            # over-flagged", which is a thumb on the scale for the defendant. Every meeting
+            # is ambiguous if you squint, so it defended nearly everything. The burden now
+            # sits the other way round: live time is the expensive option and the invite
+            # has to show why it is needed.
+            "Live time is the expensive option, so the meeting carries the burden of "
+            "proof. Score what the invite actually gives evidence for — not what a "
+            "meeting with this title could conceivably be at its best. An invite that "
+            "gives no evidence its work needs live time has not made its case, and a "
+            "vague or missing agenda is itself evidence against.",
+            "Do not inflate a category to be generous. A meeting that is merely useful, "
+            "well-attended, or important is not thereby one that needs a live slot.",
             "Do not lower a meeting's necessity just because it is expensive; cost is "
             "context for scrutiny, not a scoring category.",
         ]
@@ -207,10 +269,18 @@ ASYNC_SIGNALS = (
     "standup", "stand-up", "status", "update", "updates", "sync", "fyi",
     "readout", "read-out", "recap", "check-in", "checkin", "roundup", "round-up",
 )
+# Widened alongside the stricter rubric, and for the same reason. Once an unrecognised
+# meeting is treated as unproven rather than waved through, the vocabulary has to actually
+# cover the live work people book: a design critique, an architecture review and a hiring
+# debrief were all falling through to the neutral branch and surviving only because that
+# branch was generous. Recognising them is what lets the neutral branch get strict without
+# flagging meetings the model itself keeps.
 LIVE_SIGNALS = (
     "decision", "decide", "kickoff", "kick-off", "planning", "retro", "retrospective",
     "brainstorm", "interview", "1:1", "one-on-one", "negotiation", "escalation",
     "postmortem", "post-mortem", "workshop", "debate",
+    "critique", "review", "debrief", "argue", "trade-off", "tradeoff",
+    "dry run", "rehearsal", "walkthrough", "walk-through", "troubleshoot",
 )
 
 RUBRIC = _rubric_prompt()
@@ -362,12 +432,17 @@ def _stub_response(
             "business_impact": 7,
         }
     else:
+        # Nothing in the title or agenda says this needs live time. Under the old rubric
+        # that scored 6 and was kept, which meant every vague invite — "Team catch-up",
+        # "Alignment meeting", an empty agenda — was defended by default. The rubric now
+        # puts the burden on the meeting, and the stub has to say the same thing or the
+        # deployed app (which runs the stub) would keep quietly defending them.
         rubric = {
-            "decision_pressure": 6,
-            "collaboration_depth": 6,
-            "interaction_value": 5,
-            "meeting_fit": 6,
-            "business_impact": 6,
+            "decision_pressure": 3,
+            "collaboration_depth": 4,
+            "interaction_value": 4,
+            "meeting_fit": 4,
+            "business_impact": 5,
         }
 
     score = _score_from_rubric(rubric)
