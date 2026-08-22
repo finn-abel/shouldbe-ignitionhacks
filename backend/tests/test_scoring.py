@@ -8,7 +8,9 @@ demo-day promise, not framework behaviour.
 
 import json
 import re
+import sys
 from decimal import Decimal
+from types import SimpleNamespace
 
 import pytest
 
@@ -36,11 +38,21 @@ DECISION = dict(
 
 
 def _assert_shape(result):
-    assert set(result) == {"score", "verdict", "reasoning", "alternative_email"}
+    assert set(result) == {
+        "score",
+        "verdict",
+        "reasoning",
+        "alternative_email",
+        "analysis_notice",
+        "analysis_error_code",
+    }
     assert isinstance(result["score"], int) and 1 <= result["score"] <= 10
     assert result["verdict"] in {"keep", "email"}
     assert isinstance(result["reasoning"], str) and result["reasoning"].strip()
     assert result["alternative_email"] is None or isinstance(result["alternative_email"], str)
+    assert result["analysis_notice"] is None or isinstance(result["analysis_notice"], str)
+    assert result["analysis_error_code"] is None or isinstance(result["analysis_error_code"], str)
+    assert (result["analysis_notice"] is None) == (result["analysis_error_code"] is None)
     # §4.4: a drafted email exists exactly when the verdict says the meeting is avoidable.
     assert (result["alternative_email"] is None) == (result["verdict"] == "keep")
 
@@ -185,7 +197,49 @@ def test_a_failing_provider_never_breaks_the_pipeline(monkeypatch, failure):
     _assert_shape(result)
     assert result["verdict"] == "keep"
     assert result["score"] == scoring.SCORE_NEUTRAL_FALLBACK
-    assert "could not be completed" in result["reasoning"]
+    assert result["analysis_notice"]
+    assert result["analysis_error_code"]
+    assert result["analysis_notice"] in result["reasoning"]
+
+
+def test_token_exhaustion_is_called_out_to_the_user(monkeypatch):
+    monkeypatch.setenv("SHOULDBE_USE_STUB", "0")
+    monkeypatch.setenv("LLM_MAX_TOKENS", "200")
+
+    def explode(prompt):
+        raise RuntimeError("response stopped because max_output_tokens was reached")
+
+    monkeypatch.setattr(scoring, "_call_llm", explode)
+
+    result = score_meeting(**STANDUP)
+
+    _assert_shape(result)
+    assert result["verdict"] == "keep"
+    assert result["score"] == scoring.SCORE_NEUTRAL_FALLBACK
+    assert result["analysis_error_code"] == scoring.ERROR_AI_OUTPUT_TOKENS
+    assert "ran out of output tokens" in result["analysis_notice"]
+    assert "LLM_MAX_TOKENS=200" in result["analysis_notice"]
+
+
+def test_openai_incomplete_max_output_tokens_raises_a_specific_error(monkeypatch):
+    class FakeOpenAI:
+        def __init__(self, api_key):
+            self.responses = SimpleNamespace(create=self.create)
+
+        def create(self, **kwargs):
+            return SimpleNamespace(
+                status="incomplete",
+                incomplete_details={"reason": "max_output_tokens"},
+                output_text="",
+            )
+
+    monkeypatch.setitem(sys.modules, "openai", SimpleNamespace(OpenAI=FakeOpenAI))
+
+    with pytest.raises(scoring.ScoringProviderError) as failure:
+        scoring._call_openai("prompt", "test-key")
+
+    assert failure.value.code == scoring.ERROR_AI_OUTPUT_TOKENS
+    assert "ran out of output tokens" in failure.value.user_message
 
 
 def test_a_refusal_is_treated_as_an_unusable_answer(monkeypatch):
@@ -310,6 +364,8 @@ def test_unusable_answers_fall_back_to_a_neutral_keep(raw):
     _assert_shape(result)
     assert result["verdict"] == "keep"
     assert result["score"] == scoring.SCORE_NEUTRAL_FALLBACK
+    assert result["analysis_error_code"] == scoring.ERROR_AI_BAD_RESPONSE
+    assert "could not read" in result["analysis_notice"]
 
 
 def test_none_does_not_crash_the_parser():

@@ -38,6 +38,8 @@ class MeetingAnalysis(BaseModel):
     verdict: Verdict
     reasoning: str
     alternative_email: str | None
+    analysis_notice: str | None = None
+    analysis_error_code: str | None = None
 
     # --- lifecycle / money state ---
     status: Status

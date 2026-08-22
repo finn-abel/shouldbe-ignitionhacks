@@ -8,11 +8,18 @@ export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localho
 function readErrorDetail(body, status) {
   const detail = body?.detail;
   if (typeof detail === 'string') return detail;
+  if (detail && typeof detail === 'object' && !Array.isArray(detail)) {
+    if (typeof detail.message === 'string') return detail.message;
+    if (typeof detail.reason === 'string') return detail.reason;
+    if (typeof detail.error === 'string') return detail.error;
+  }
   if (Array.isArray(detail) && detail.length) {
     const first = detail[0];
     const field = first.loc?.filter((part) => part !== 'body').join(' → ');
     return field ? `${field}: ${first.msg}` : first.msg;
   }
+  if (typeof body?.message === 'string') return body.message;
+  if (typeof body?.error === 'string') return body.error;
   return `Request failed (${status}).`;
 }
 
@@ -26,15 +33,17 @@ async function request(path, options = {}) {
       credentials: 'include',
       ...options,
     });
-  } catch {
+  } catch (failure) {
     // A network-level failure, not an API error — usually the backend is not running.
-    throw new Error(`Could not reach the ShouldBe API at ${API_BASE_URL}.`);
+    const reason = failure instanceof Error && failure.message ? ` ${failure.message}.` : '';
+    throw new Error(`Could not reach the ShouldBe API at ${API_BASE_URL}.${reason}`);
   }
 
   const body = await response.json().catch(() => null);
   if (!response.ok) {
     const failure = new Error(readErrorDetail(body, response.status));
     failure.status = response.status;
+    failure.code = body?.detail?.code ?? body?.code;
     throw failure;
   }
   return body;

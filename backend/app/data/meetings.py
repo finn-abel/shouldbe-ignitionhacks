@@ -62,6 +62,8 @@ def save_analysis(
 
     session.commit()
     session.refresh(meeting)
+    meeting.analysis_notice = analysis.analysis_notice
+    meeting.analysis_error_code = analysis.analysis_error_code
     return meeting
 
 

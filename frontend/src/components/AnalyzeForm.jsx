@@ -26,7 +26,7 @@ const EMPTY_ATTENDEES = { ic: 8, senior: 0, manager: 1, exec: 0 };
  * computed by the backend and never duplicated here, so the number on screen is always
  * the number in the ledger.
  */
-export default function AnalyzeForm({ onAnalyzed, pending, error }) {
+export default function AnalyzeForm({ onAnalyzed, pending, error, notice }) {
   const [fields, setFields] = useState(EMPTY);
   const [attendees, setAttendees] = useState(EMPTY_ATTENDEES);
 
@@ -187,6 +187,12 @@ export default function AnalyzeForm({ onAnalyzed, pending, error }) {
       {error && (
         <p className="notice notice--error" role="alert">
           {error}
+        </p>
+      )}
+
+      {!error && notice?.message && (
+        <p className="notice notice--warning" role="alert">
+          {notice.message}
         </p>
       )}
 

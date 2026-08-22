@@ -38,6 +38,7 @@ export default function App() {
   const [analysis, setAnalysis] = useState(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState(null);
+  const [notice, setNotice] = useState(null);
   const [theme, setTheme] = useState(readTheme);
   // Bumped after each analysis so the dashboard re-reads a ledger it knows has changed.
   const [ledgerVersion, setLedgerVersion] = useState(0);
@@ -73,6 +74,7 @@ export default function App() {
     await logout().catch(() => {});
     setUser(null);
     setAnalysis(null);
+    setNotice(null);
     setView('dashboard');
   };
 
@@ -83,8 +85,15 @@ export default function App() {
   const analyze = async (meeting) => {
     setPending(true);
     setError(null);
+    setNotice(null);
     try {
-      setAnalysis(await analyzeMeeting(meeting));
+      const result = await analyzeMeeting(meeting);
+      setAnalysis(result);
+      setNotice(
+        result.analysis_notice
+          ? { message: result.analysis_notice, code: result.analysis_error_code }
+          : null,
+      );
       setLedgerVersion((version) => version + 1);
     } catch (failure) {
       setError(failure.message);
@@ -197,7 +206,12 @@ export default function App() {
                     </header>
 
                     <div className="workbench">
-                      <AnalyzeForm onAnalyzed={analyze} pending={pending} error={error} />
+                      <AnalyzeForm
+                        onAnalyzed={analyze}
+                        pending={pending}
+                        error={error}
+                        notice={notice}
+                      />
                       <AnalysisResult analysis={analysis} />
                     </div>
                   </section>

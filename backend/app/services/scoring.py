@@ -13,7 +13,9 @@ import json
 import logging
 import os
 import re
+from dataclasses import dataclass
 from decimal import Decimal
+from typing import Any
 
 from app.enums import Verdict
 
@@ -43,6 +45,29 @@ SCORE_NEUTRAL_FALLBACK = 5
 SCORE_MIN = 1
 SCORE_MAX = 10
 EMAIL_SCORE_MAX = 4
+
+ERROR_AI_OUTPUT_TOKENS = "ai_output_token_limit"
+ERROR_AI_CONTEXT_WINDOW = "ai_context_window"
+ERROR_AI_CONFIGURATION = "ai_configuration"
+ERROR_AI_AUTHENTICATION = "ai_authentication"
+ERROR_AI_RATE_LIMIT = "ai_rate_limit"
+ERROR_AI_QUOTA = "ai_quota"
+ERROR_AI_TIMEOUT = "ai_timeout"
+ERROR_AI_NETWORK = "ai_network"
+ERROR_AI_REFUSAL = "ai_refusal"
+ERROR_AI_BAD_RESPONSE = "ai_bad_response"
+ERROR_AI_PROVIDER = "ai_provider_error"
+
+
+@dataclass(frozen=True)
+class ScoringProviderError(RuntimeError):
+    """A provider failure that is safe to show to the user in plain language."""
+
+    code: str
+    user_message: str
+
+    def __str__(self) -> str:
+        return self.user_message
 
 RUBRIC_CATEGORIES = (
     {
@@ -380,6 +405,135 @@ def _api_key(provider: str | None = None) -> str | None:
     return os.getenv("OPENAI_API_KEY") or os.getenv("LLM_API_KEY") or None
 
 
+def _provider_name(provider: str | None) -> str:
+    if provider == "openai":
+        return "OpenAI"
+    if provider == "anthropic":
+        return "Anthropic"
+    return "the AI provider"
+
+
+def _read_detail(value: Any, key: str) -> Any:
+    if isinstance(value, dict):
+        return value.get(key)
+    return getattr(value, key, None)
+
+
+def _failure_text(failure: Exception) -> str:
+    parts = [
+        failure.__class__.__name__,
+        str(getattr(failure, "status_code", "")),
+        str(getattr(failure, "status", "")),
+        str(getattr(failure, "code", "")),
+        str(getattr(failure, "type", "")),
+        str(failure),
+    ]
+    return " ".join(part for part in parts if part).lower()
+
+
+def _token_limit_message(provider: str | None) -> str:
+    return (
+        f"The AI ran out of output tokens before it finished scoring this meeting "
+        f"({_provider_name(provider)}, model {_model(provider) if provider else 'unknown'}, "
+        f"LLM_MAX_TOKENS={_max_tokens()}). ShouldBe recorded a neutral keep verdict; "
+        "increase LLM_MAX_TOKENS or shorten the meeting details, then re-run the analysis."
+    )
+
+
+def _context_window_message(provider: str | None) -> str:
+    return (
+        f"The meeting details were too large for {_provider_name(provider)}'s context "
+        "window. ShouldBe recorded a neutral keep verdict; shorten the title/agenda or "
+        "use a model with a larger context window, then re-run the analysis."
+    )
+
+
+def _classify_llm_exception(
+    failure: Exception, provider: str | None = None
+) -> ScoringProviderError:
+    """Turn SDK-specific failures into stable, user-facing explanations."""
+    if isinstance(failure, ScoringProviderError):
+        return failure
+
+    status_code = getattr(failure, "status_code", None) or getattr(failure, "status", None)
+    text = _failure_text(failure)
+
+    if any(
+        signal in text
+        for signal in (
+            "max_output_tokens",
+            "max_tokens",
+            "output token",
+            "finish_reason length",
+            "stop_reason max_tokens",
+        )
+    ):
+        return ScoringProviderError(ERROR_AI_OUTPUT_TOKENS, _token_limit_message(provider))
+
+    if any(
+        signal in text
+        for signal in (
+            "context_length_exceeded",
+            "maximum context length",
+            "context window",
+            "input is too long",
+            "too many tokens",
+        )
+    ):
+        return ScoringProviderError(ERROR_AI_CONTEXT_WINDOW, _context_window_message(provider))
+
+    if "shouldbe_use_stub" in text or "unsupported llm_provider" in text:
+        return ScoringProviderError(
+            ERROR_AI_CONFIGURATION,
+            f"AI scoring is not configured correctly: {failure}",
+        )
+
+    if status_code in {401, 403} or any(
+        signal in text
+        for signal in ("authentication", "unauthorized", "forbidden", "invalid api key")
+    ):
+        return ScoringProviderError(
+            ERROR_AI_AUTHENTICATION,
+            f"{_provider_name(provider)} rejected the API key. Check the configured key, "
+            "then re-run the analysis.",
+        )
+
+    if "insufficient_quota" in text or "quota" in text or "billing" in text or "credit" in text:
+        return ScoringProviderError(
+            ERROR_AI_QUOTA,
+            f"{_provider_name(provider)} says the account is out of quota or billing "
+            "credit. Add quota or switch back to the local stub, then re-run the analysis.",
+        )
+
+    if status_code == 429 or "rate limit" in text or "rate_limit" in text:
+        return ScoringProviderError(
+            ERROR_AI_RATE_LIMIT,
+            f"{_provider_name(provider)} rate-limited the scoring request. Wait a moment "
+            "or lower request volume, then re-run the analysis.",
+        )
+
+    if "timeout" in text or "timed out" in text:
+        return ScoringProviderError(
+            ERROR_AI_TIMEOUT,
+            f"{_provider_name(provider)} did not answer before the request timed out. "
+            "ShouldBe recorded a neutral keep verdict; re-run the analysis once the "
+            "provider is responsive.",
+        )
+
+    if any(signal in text for signal in ("connection", "network", "dns", "socket")):
+        return ScoringProviderError(
+            ERROR_AI_NETWORK,
+            f"ShouldBe could not reach {_provider_name(provider)}. Check network access "
+            "from the backend, then re-run the analysis.",
+        )
+
+    return ScoringProviderError(
+        ERROR_AI_PROVIDER,
+        f"{_provider_name(provider)} could not complete scoring ({failure}). ShouldBe "
+        "recorded a neutral keep verdict; check backend logs for the full provider error.",
+    )
+
+
 def _call_llm(prompt: str) -> str:
     """The seam (doc 2 §8) — the only function that changes between stub and provider.
 
@@ -423,9 +577,16 @@ def _call_openai(prompt: str, key: str) -> str:
     )
 
     if getattr(response, "status", None) == "incomplete":
-        logger.warning(
-            "OpenAI scoring response was incomplete: %s",
-            getattr(response, "incomplete_details", None),
+        details = getattr(response, "incomplete_details", None)
+        reason = _read_detail(details, "reason")
+        if reason == "max_output_tokens":
+            raise ScoringProviderError(ERROR_AI_OUTPUT_TOKENS, _token_limit_message("openai"))
+        suffix = f" ({reason})" if reason else ""
+        raise ScoringProviderError(
+            ERROR_AI_PROVIDER,
+            f"OpenAI returned an incomplete scoring response{suffix}. ShouldBe recorded "
+            "a neutral keep verdict; re-run the analysis once the provider can finish "
+            "the response.",
         )
 
     return getattr(response, "output_text", "") or ""
@@ -443,10 +604,15 @@ def _call_anthropic(prompt: str, key: str) -> str:
         messages=[{"role": "user", "content": prompt}],
     )
 
+    if response.stop_reason == "max_tokens":
+        raise ScoringProviderError(ERROR_AI_OUTPUT_TOKENS, _token_limit_message("anthropic"))
+
     if response.stop_reason == "refusal":
-        # Handled like any other unusable answer: the parser returns a neutral keep.
-        logger.warning("The model declined to score this meeting.")
-        return ""
+        raise ScoringProviderError(
+            ERROR_AI_REFUSAL,
+            "The AI provider declined to score this meeting. ShouldBe recorded a neutral "
+            "keep verdict; revise the meeting details and re-run the analysis.",
+        )
 
     # Skip thinking blocks; only the text blocks carry the JSON.
     return "".join(block.text for block in response.content if block.type == "text")
@@ -461,13 +627,20 @@ def _strip_fences(raw: str) -> str:
     return body[: body.rfind("```")].strip() if "```" in body else body.strip()
 
 
-def _neutral_keep(reason: str) -> dict:
+def _neutral_keep(
+    reason: str,
+    *,
+    analysis_notice: str | None = None,
+    analysis_error_code: str | None = None,
+) -> dict:
     """Fallback verdict. Never flags a meeting on the strength of an unreadable answer."""
     return {
         "score": SCORE_NEUTRAL_FALLBACK,
         "verdict": Verdict.KEEP.value,
         "reasoning": reason,
         "alternative_email": None,
+        "analysis_notice": analysis_notice,
+        "analysis_error_code": analysis_error_code,
     }
 
 
@@ -512,7 +685,13 @@ def _parse_analysis(raw: str) -> dict:
     """
     fallback = _neutral_keep(
         "The necessity analysis could not be read, so this meeting is left on the "
-        "calendar. Re-run the analysis to get a verdict."
+        "calendar. Re-run the analysis to get a verdict.",
+        analysis_notice=(
+            "The AI returned an answer ShouldBe could not read as valid scoring JSON. "
+            "ShouldBe recorded a neutral keep verdict instead of guessing; re-run the "
+            "analysis to try again."
+        ),
+        analysis_error_code=ERROR_AI_BAD_RESPONSE,
     )
 
     try:
@@ -545,6 +724,8 @@ def _parse_analysis(raw: str) -> dict:
         "verdict": verdict.value,
         "reasoning": reasoning.strip(),
         "alternative_email": draft,
+        "analysis_notice": None,
+        "analysis_error_code": None,
     }
 
 
@@ -558,8 +739,9 @@ def score_meeting(
     recurrence_freq: str | None,
     cost: Decimal,
 ) -> dict:
-    """Score one meeting. Returns {score, verdict, reasoning, alternative_email}.
+    """Score one meeting.
 
+    Returns the verdict payload plus optional analysis_notice / analysis_error_code fields.
     The returned shape is identical whether the stub or the real provider answered.
     """
     prompt = build_prompt(
@@ -585,15 +767,25 @@ def score_meeting(
 
     try:
         raw = _call_llm(prompt)
-    except Exception:
-        # A missing key, a rate limit, a network drop: the meeting still gets costed and
-        # recorded with a neutral verdict rather than failing the whole request. Logged
-        # in full server-side; the user sees a plain sentence. Flipping SHOULDBE_USE_STUB
-        # back on is the instant recovery (doc 4 task 4-E).
-        logger.exception("Necessity scoring failed; falling back to a neutral verdict.")
+    except Exception as failure:
+        provider = None
+        try:
+            provider = _provider()
+        except Exception:
+            pass
+        classified = _classify_llm_exception(failure, provider)
+        # The meeting still gets costed and recorded with a neutral verdict rather than
+        # failing the whole request, but the returned record now carries the exact class
+        # of AI failure so the UI can notify the user instead of burying it.
+        logger.exception(
+            "Necessity scoring failed (%s); falling back to a neutral verdict.",
+            classified.code,
+        )
         return _neutral_keep(
-            "The necessity analysis could not be completed, so this meeting is left on "
-            "the calendar. Re-run the analysis to get a verdict."
+            f"{classified.user_message} The meeting is left on the calendar with a "
+            "neutral score so it is not falsely flagged.",
+            analysis_notice=classified.user_message,
+            analysis_error_code=classified.code,
         )
 
     return _parse_analysis(raw)

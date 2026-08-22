@@ -53,6 +53,8 @@ def analyze(
         reasoning=assessment["reasoning"],
         # A drafted replacement exists only for a meeting we are saying to replace (§4.4).
         alternative_email=assessment["alternative_email"] if verdict is Verdict.EMAIL else None,
+        analysis_notice=assessment.get("analysis_notice"),
+        analysis_error_code=assessment.get("analysis_error_code"),
         status=Status.ANALYZED,
         reclaimed_savings=NOTHING_RECLAIMED,
     )

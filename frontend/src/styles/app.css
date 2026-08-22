@@ -535,6 +535,16 @@
   border: 1px solid oklch(54% 0.17 34 / 0.25);
 }
 
+.notice--warning {
+  background: var(--accent-wash);
+  color: oklch(38% 0.12 76);
+  border: 1px solid oklch(64% 0.14 78 / 0.32);
+}
+
+:root[data-theme='dark'] .notice--warning {
+  color: var(--accent);
+}
+
 /* ----------------------------------------------------------------- the result */
 
 .result {
