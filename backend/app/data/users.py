@@ -12,7 +12,8 @@ from decimal import Decimal
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.data.models import Budget, User
+from app.data.models import Budget, RoleTierRate, User
+from app.services.costing import DEFAULT_TIER_RATES
 
 DEMO_USER_EMAIL = "demo@shouldbe.local"
 DEMO_USER_NAME = "Demo"
@@ -29,6 +30,10 @@ def get_acting_user(session: Session) -> User:
     if user is None:
         user = User(email=DEMO_USER_EMAIL, display_name=DEMO_USER_NAME, is_guest=True)
         user.budget = Budget(monthly_amount=DEMO_BUDGET)
+        user.tier_rates = [
+            RoleTierRate(tier=tier, hourly_rate=rate)
+            for tier, rate in DEFAULT_TIER_RATES.items()
+        ]
         session.add(user)
         session.commit()
         session.refresh(user)

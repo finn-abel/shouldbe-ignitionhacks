@@ -2,12 +2,14 @@ import { useState } from 'react';
 import AnalysisResult from './components/AnalysisResult.jsx';
 import AnalyzeForm from './components/AnalyzeForm.jsx';
 import Dashboard from './components/Dashboard.jsx';
+import Settings from './components/Settings.jsx';
 import { analyzeMeeting } from './api/client.js';
 import './styles/app.css';
 
 const VIEWS = [
   { key: 'dashboard', label: 'Dashboard' },
   { key: 'analyze', label: 'Analyze a meeting' },
+  { key: 'settings', label: 'Settings' },
 ];
 
 export default function App() {
@@ -54,13 +56,15 @@ export default function App() {
       </header>
 
       <main className={view === 'analyze' ? 'workbench' : 'stage'}>
-        {view === 'dashboard' ? (
-          <Dashboard refreshKey={ledgerVersion} />
-        ) : (
+        {view === 'dashboard' && <Dashboard refreshKey={ledgerVersion} />}
+        {view === 'analyze' && (
           <>
             <AnalyzeForm onAnalyzed={analyze} pending={pending} error={error} />
             <AnalysisResult analysis={analysis} />
           </>
+        )}
+        {view === 'settings' && (
+          <Settings onSaved={() => setLedgerVersion((version) => version + 1)} />
         )}
       </main>
 

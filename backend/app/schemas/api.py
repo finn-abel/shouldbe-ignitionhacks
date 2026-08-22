@@ -6,7 +6,7 @@ ORM models never leave an endpoint; these are what the API actually returns.
 from datetime import date, datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, RootModel, field_validator
 
 from app.enums import Status, Tier, Verdict
 
@@ -83,3 +83,32 @@ class Stats(BaseModel):
     reclaimed_savings: Decimal
     spend_over_time: list[SpendBucket]
     budget: BudgetComparison
+
+
+class BudgetRead(BaseModel):
+    """The acting user's monthly meeting budget. Null when they have not set one."""
+
+    monthly_amount: Decimal | None
+
+
+class BudgetUpdate(BaseModel):
+    monthly_amount: Decimal = Field(ge=0, le=Decimal("100000000"))
+
+
+class TierRates(RootModel[dict[Tier, Decimal]]):
+    """The four blended role-tier rates, keyed by tier.
+
+    Blended rates only — doc 1's privacy stance means an individual salary must never be
+    representable here, and a per-person shape would make it representable.
+    """
+
+    @field_validator("root")
+    @classmethod
+    def _complete_and_non_negative(cls, rates: dict[Tier, Decimal]) -> dict[Tier, Decimal]:
+        missing = {tier.value for tier in Tier} - {tier.value for tier in rates}
+        if missing:
+            raise ValueError(f"Every tier needs a rate. Missing: {', '.join(sorted(missing))}.")
+        for tier, rate in rates.items():
+            if rate < 0:
+                raise ValueError(f"The {tier.value} rate must not be negative.")
+        return rates
