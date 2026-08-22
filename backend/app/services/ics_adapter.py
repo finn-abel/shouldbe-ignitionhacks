@@ -162,6 +162,27 @@ def parse_ics(ics_text: str, exclude_emails: tuple[str, ...] = ()) -> "ParsedInv
         for email in (_email_of(a) for a in event.attendees)
         if email and _billing_key(email) not in ignored
     )
+
+    organizer = _email_of(event.organizer) if event.organizer else ""
+
+    # The organizer is in the room. Whether they are also in the ATTENDEE list is a
+    # question about the sending client, not about who attends: Google repeats the
+    # organizer there, Outlook and several others do not. Counting only ATTENDEE meant
+    # every invite from those clients was billed one person short — silently, and in the
+    # understating direction, which is the direction nobody notices.
+    #
+    # `attendees` being non-empty is the guard, not an optimisation: once ShouldBe is
+    # excluded, an invite with nobody left in it is a solo hold on someone's calendar
+    # rather than a meeting, and the ledger has always priced that at nothing. Seating the
+    # organizer unconditionally would put every private calendar block on the books.
+    #
+    # Added here rather than in the cost math because this is a fact about the invite, and
+    # it should read the same way through every door that produces one.
+    if attendees and organizer and _billing_key(organizer) not in ignored:
+        already_seated = {_billing_key(email) for email in attendees}
+        if _billing_key(organizer) not in already_seated:
+            attendees = sorted(attendees + [organizer])
+
     if len(attendees) > MAX_ATTENDEES:
         # Priced on the first MAX_ATTENDEES rather than refused: an invite this large is
         # either a mailing list or an attack, and both should land as a bounded row.
@@ -170,7 +191,6 @@ def parse_ics(ics_text: str, exclude_emails: tuple[str, ...] = ()) -> "ParsedInv
         )
         attendees = attendees[:MAX_ATTENDEES]
 
-    organizer = _email_of(event.organizer) if event.organizer else ""
     recurrence = recurrence_from_rrule(_rrule_of(event))
 
     return ParsedInvite(

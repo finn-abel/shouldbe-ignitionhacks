@@ -47,17 +47,38 @@ def test_shouldbes_own_address_is_not_billed_as_an_attendee():
     # Billing the tool would inflate every meeting it is ever invited to.
     invite = parse_ics(invite_text(), (SHOULDBE,))
 
-    assert invite.attendee_count == 2
-    assert analyze(invite).cost == Decimal("48.96")  # 2 IT-02 references x 30 minutes
+    assert SHOULDBE not in invite.attendee_emails
+    # a@x.com, b@x.com, and Priya, who organized it — three people, one of whom is not
+    # in the ATTENDEE list. 3 IT-02 references x 30 minutes.
+    assert invite.attendee_count == 3
+    assert analyze(invite).cost == Decimal("73.44")
 
 
 def test_without_the_exclusion_the_tool_would_be_billed():
     # Guards the guard: proves the exclusion is doing work.
-    assert parse_ics(invite_text()).attendee_count == 3
+    assert parse_ics(invite_text()).attendee_count == 4
 
 
 def test_the_exclusion_is_case_insensitive():
-    assert parse_ics(invite_text(), ("ShouldBe@Example.COM",)).attendee_count == 2
+    assert parse_ics(invite_text(), ("ShouldBe@Example.COM",)).attendee_count == 3
+
+
+def test_the_organizer_is_counted_even_when_the_client_omits_them_from_attendee():
+    """The reported bug: a two-person meeting priced as one.
+
+    Whether the organizer also appears in ATTENDEE is a fact about the sending client —
+    Google repeats them there, Outlook does not — and never a fact about who is in the
+    room. Counting only ATTENDEE understated every invite from the second kind of client
+    by exactly one person, in the direction nobody checks.
+    """
+    outlook = parse_ics(invite_text(attendees=(SHOULDBE, "a@x.com")), (SHOULDBE,))
+    google = parse_ics(invite_text(attendees=(SHOULDBE, "a@x.com", "priya@x.com")), (SHOULDBE,))
+
+    assert outlook.attendee_count == 2, "the organizer is in the room"
+    assert "priya@x.com" in outlook.attendee_emails
+    # The same two people either way: the organizer is seated once, never twice.
+    assert outlook.attendee_emails == google.attendee_emails
+    assert analyze(outlook).cost == analyze(google).cost
 
 
 def test_attendees_are_priced_at_the_lowest_tier():
@@ -69,6 +90,12 @@ def test_attendees_are_priced_at_the_lowest_tier():
 
 
 def test_a_meeting_with_no_attendees_but_shouldbe_costs_nothing():
+    """Nobody left in the room means no meeting — not a room of one.
+
+    The organizer is otherwise seated, so this is the case that decides whether a private
+    calendar block lands on the ledger. It does not: an invite whose only other attendee
+    is ShouldBe is a hold on one person's own time, not meeting spend.
+    """
     invite = parse_ics(invite_text(attendees=(SHOULDBE,)), (SHOULDBE,))
 
     assert invite.attendee_count == 0
@@ -114,7 +141,7 @@ def test_no_rrule_means_a_one_off_with_no_annual_cost():
 def test_a_weekly_invite_annualizes_at_fifty_two_occurrences():
     invite = parse_ics(invite_text(rrule="FREQ=WEEKLY"), (SHOULDBE,))
 
-    assert analyze(invite).annualized_cost == Decimal("2545.92")  # 48.96 x 52
+    assert analyze(invite).annualized_cost == Decimal("3818.88")  # 73.44 x 52
 
 
 def test_an_unreadable_rrule_is_treated_as_non_recurring():
@@ -173,8 +200,8 @@ def test_the_reply_carries_the_score_the_cost_and_the_draft():
     subject, body = compose_reply(analysis)
 
     assert str(analysis.score) in subject
-    assert "$48.96" in body
-    assert "$2,545.92 a year" in body
+    assert "$73.44" in body
+    assert "$3,818.88 a year" in body
     assert analysis.alternative_email in body
 
 
@@ -215,4 +242,4 @@ def test_an_invite_missing_PRODID_is_still_read():
     invite = parse_ics(text, (SHOULDBE,))
 
     assert invite.title == "Weekly Engineering Standup"
-    assert invite.attendee_count == 2
+    assert invite.attendee_count == 3

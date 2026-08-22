@@ -59,7 +59,7 @@ UID:roles-1
 SUMMARY:Quarterly planning
 DTSTART:20260401T150000Z
 DURATION:PT1H
-ORGANIZER:mailto:ops@northwind.example
+ORGANIZER:mailto:Ada@Northwind.Example
 ATTENDEE:mailto:Ada@Northwind.Example
 ATTENDEE:mailto:bo@northwind.example
 ATTENDEE:mailto:cy@northwind.example
