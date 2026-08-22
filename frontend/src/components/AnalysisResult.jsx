@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { formatMoney, formatMoneyExact } from '../lib/format.js';
+import { formatMoney, formatMoneyExact, hasAmount } from '../lib/format.js';
 
 const VERDICT = {
   email: { label: 'Should be an email', tone: 'leak' },
@@ -41,7 +41,7 @@ export default function AnalysisResult({ analysis }) {
         <p className="result__exact figure">{formatMoneyExact(analysis.cost)}</p>
       </header>
 
-      {analysis.annualized_cost && (
+      {hasAmount(analysis.annualized_cost) && (
         <p className="result__annual">
           <span>Repeats {analysis.recurrence_freq?.toLowerCase()} —</span>{' '}
           <strong className="figure">{formatMoney(analysis.annualized_cost)}</strong> a year

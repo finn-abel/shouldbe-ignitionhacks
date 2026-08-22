@@ -43,38 +43,28 @@ export default function Dashboard({ refreshKey }) {
   }, [load, refreshKey]);
 
   /**
-   * Convert a flagged meeting (doc 2 §5.4). The row and the three affected figures move
-   * at once so the action feels instant, then the server's own numbers replace them —
-   * this is a local nudge to already-derived totals, never a re-derivation of the money
-   * model in the browser. On failure the snapshot goes back and the error is shown.
+   * Convert a flagged meeting (doc 2 §5.4).
+   *
+   * The row flips immediately so the click has an answer, but every dollar comes back
+   * from the server. The browser deriving money is the one thing this app must not do:
+   * an earlier version nudged the totals here and got it subtly wrong — the chart nudge
+   * compared a raw date against a Monday bucket and silently did nothing, and the
+   * over-budget percentage was never recomputed at all, so the headline disagreed with
+   * the tiles until the refetch landed. Optimism belongs on the action, not on the
+   * arithmetic. On failure the pre-click snapshot goes back.
    */
   const convert = async (meeting) => {
     const snapshot = data;
-    const cost = Number(meeting.cost);
     setConverting(meeting.id);
     setError(null);
 
     setData((current) => ({
+      ...current,
       meetings: current.meetings.map((row) =>
         row.id === meeting.id
           ? { ...row, status: 'converted', reclaimed_savings: meeting.cost }
           : row,
       ),
-      stats: {
-        ...current.stats,
-        total_spend: Number(current.stats.total_spend) - cost,
-        avoidable_spend: Number(current.stats.avoidable_spend) - cost,
-        reclaimed_savings: Number(current.stats.reclaimed_savings) + cost,
-        spend_over_time: current.stats.spend_over_time.map((point) =>
-          point.period === meeting.created_at.slice(0, 10)
-            ? { ...point, amount: Number(point.amount) - cost }
-            : point,
-        ),
-        budget: {
-          ...current.stats.budget,
-          month_spend: Number(current.stats.budget.month_spend) - cost,
-        },
-      },
     }));
 
     try {
@@ -136,7 +126,7 @@ export default function Dashboard({ refreshKey }) {
         </div>
       </div>
 
-      <section className="tiles">
+      <section className={`tiles ${converting ? 'tiles--settling' : ''}`}>
         <div className="tile tile--total">
           <p className="tile__label">Total spend</p>
           <p className="tile__figure figure">{formatMoney(stats.total_spend)}</p>

@@ -24,3 +24,13 @@ export function formatMoneyExact(value) {
   if (value === null || value === undefined) return '—';
   return usdCents.format(Number(value));
 }
+
+/**
+ * Whether a money field holds an amount worth showing.
+ *
+ * Money crosses the wire as an exact decimal *string*, and `"0.00"` is truthy in
+ * JavaScript — so `value && ...` renders "$0/yr" for a meeting that has no annual cost.
+ */
+export function hasAmount(value) {
+  return value !== null && value !== undefined && Number(value) > 0;
+}

@@ -8,6 +8,7 @@ back a real, fully writable user — guest is shared and pre-seeded, never restr
 from decimal import Decimal
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.data.models import Budget, RoleTierRate, User
@@ -40,13 +41,22 @@ def get_or_create_guest(session: Session) -> User:
     guest entry works even on a database nobody remembered to seed.
     """
     guest = session.scalar(select(User).where(User.is_guest.is_(True)))
-    if guest is None:
-        guest = _with_starting_config(
-            User(email=GUEST_EMAIL, display_name=GUEST_NAME, is_guest=True)
-        )
-        session.add(guest)
+    if guest is not None:
+        return guest
+
+    guest = _with_starting_config(
+        User(email=GUEST_EMAIL, display_name=GUEST_NAME, is_guest=True)
+    )
+    session.add(guest)
+    try:
         session.commit()
-        session.refresh(guest)
+    except IntegrityError:
+        # Two people pressed "continue as guest" at the same moment on a fresh database.
+        # The unique email is what settles it; whoever lost simply reads the winner's row.
+        session.rollback()
+        return session.scalar(select(User).where(User.email == GUEST_EMAIL))
+
+    session.refresh(guest)
     return guest
 
 

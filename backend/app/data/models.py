@@ -5,6 +5,7 @@ without importing the database layer.
 """
 
 from datetime import datetime, timezone
+from decimal import Decimal
 
 from sqlalchemy import (
     JSON,
@@ -112,7 +113,7 @@ class RoleTierRate(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
     tier: Mapped[Tier] = _enum_column(Tier, nullable=False)
-    hourly_rate: Mapped[float] = mapped_column(MONEY, nullable=False)
+    hourly_rate: Mapped[Decimal] = mapped_column(MONEY, nullable=False)
 
     user: Mapped[User] = relationship(back_populates="tier_rates")
 
@@ -126,7 +127,7 @@ class Budget(Base):
     user_id: Mapped[int] = mapped_column(
         ForeignKey("users.id"), nullable=False, unique=True, index=True
     )
-    monthly_amount: Mapped[float] = mapped_column(MONEY, nullable=False)
+    monthly_amount: Mapped[Decimal] = mapped_column(MONEY, nullable=False)
 
     user: Mapped[User] = relationship(back_populates="budget")
 
@@ -166,8 +167,8 @@ class Meeting(Base):
     recurrence_freq: Mapped[str | None] = mapped_column(String(32), nullable=True)
 
     # --- computed financials ---
-    cost: Mapped[float] = mapped_column(MONEY, nullable=False)
-    annualized_cost: Mapped[float | None] = mapped_column(MONEY, nullable=True)
+    cost: Mapped[Decimal] = mapped_column(MONEY, nullable=False)
+    annualized_cost: Mapped[Decimal | None] = mapped_column(MONEY, nullable=True)
 
     # --- AI output ---
     score: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -177,7 +178,7 @@ class Meeting(Base):
 
     # --- lifecycle / money state ---
     status: Mapped[Status] = _enum_column(Status, nullable=False, default=Status.ANALYZED)
-    reclaimed_savings: Mapped[float] = mapped_column(MONEY, nullable=False, default=0)
+    reclaimed_savings: Mapped[Decimal] = mapped_column(MONEY, nullable=False, default=0)
     created_at: Mapped[datetime] = mapped_column(UtcDateTime, nullable=False, default=_utcnow, index=True)
 
     user: Mapped[User] = relationship(back_populates="meetings")

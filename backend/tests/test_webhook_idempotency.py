@@ -174,3 +174,28 @@ def test_a_redelivered_invite_does_not_change_the_money(session, guest):
 
     after = total_spend([MeetingRead.model_validate(m) for m in list_meetings(session, guest.id)])
     assert before == after == Decimal("75.00")
+
+
+# ------------------------------------------------------- the shared guest's ledger
+
+
+def test_the_ledger_read_is_bounded(session, guest):
+    # The guest is shared and writable, so its ledger grows all day. Every stats request
+    # reads the whole thing.
+    from app.data.meetings import MAX_LEDGER_ROWS
+
+    for n in range(MAX_LEDGER_ROWS + 25):
+        _record(session, guest, f"ics:{n}@x")
+
+    rows = list_meetings(session, guest.id)
+
+    assert len(rows) == MAX_LEDGER_ROWS
+    # Newest first, so the cap drops the oldest rows rather than the current ones.
+    assert rows[0].id > rows[-1].id
+
+
+def test_a_smaller_limit_can_be_asked_for(session, guest):
+    for n in range(5):
+        _record(session, guest, f"ics:{n}@x")
+
+    assert len(list_meetings(session, guest.id, limit=2)) == 2

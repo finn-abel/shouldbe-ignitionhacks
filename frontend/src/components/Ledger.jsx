@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { formatMoney, formatMoneyExact } from '../lib/format.js';
+import { formatMoney, formatMoneyExact, hasAmount } from '../lib/format.js';
 
 const VERDICT = {
   email: { label: 'Should be an email', tone: 'leak' },
@@ -25,7 +25,7 @@ export default function Ledger({ meetings, onConvert, converting }) {
 
   // The demo drill-down: the recurring meeting bleeding the most money per year.
   const worstOffender = meetings
-    .filter((m) => m.is_recurring && m.annualized_cost && m.status !== 'converted')
+    .filter((m) => m.is_recurring && hasAmount(m.annualized_cost) && m.status !== 'converted')
     .sort((a, b) => Number(b.annualized_cost) - Number(a.annualized_cost))[0];
 
   return (
@@ -60,7 +60,7 @@ export default function Ledger({ meetings, onConvert, converting }) {
 
               <span className="entry__money">
                 <span className="entry__cost figure">{formatMoneyExact(meeting.cost)}</span>
-                {meeting.annualized_cost && (
+                {hasAmount(meeting.annualized_cost) && (
                   <span className="entry__annual figure">
                     {formatMoney(meeting.annualized_cost)}/yr
                   </span>

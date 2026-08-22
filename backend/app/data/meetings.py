@@ -62,13 +62,22 @@ def find_by_source_key(session: Session, user_id: int, source_key: str) -> Meeti
     )
 
 
-def list_meetings(session: Session, user_id: int) -> list[Meeting]:
-    """The acting user's ledger, newest first."""
+# The guest user is shared and writable, so its ledger grows with every person who tries
+# the demo. Every stats request reads the whole ledger, so leave it unbounded and the
+# dashboard degrades quietly as the day goes on.
+MAX_LEDGER_ROWS = 500
+
+
+def list_meetings(
+    session: Session, user_id: int, limit: int = MAX_LEDGER_ROWS
+) -> list[Meeting]:
+    """The acting user's ledger, newest first, most recent `limit` rows."""
     return list(
         session.scalars(
             select(Meeting)
             .where(Meeting.user_id == user_id)
             .order_by(Meeting.created_at.desc(), Meeting.id.desc())
+            .limit(limit)
         )
     )
 

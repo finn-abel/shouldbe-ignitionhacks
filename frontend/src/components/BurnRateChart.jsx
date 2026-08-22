@@ -51,12 +51,13 @@ export default function BurnRateChart({ buckets, bucket }) {
   const area = `${points[0].x},${baseline} ${line} ${points.at(-1).x},${baseline}`;
   const active = hovered === null ? null : points[hovered];
 
+  // The viewBox is left to scale uniformly. preserveAspectRatio="none" would stretch
+  // every <circle> into an ellipse; non-scaling-stroke saves the stroke, not the geometry.
   return (
     <figure className="chart">
       <svg
         className="chart__svg"
         viewBox={`0 0 ${VIEW.w} ${VIEW.h}`}
-        preserveAspectRatio="none"
         role="img"
         aria-label={`Meeting spend by ${bucket}. Peak ${formatMoney(peak)} on ${dayLabel(peakPoint.period)}.`}
         onMouseLeave={() => setHovered(null)}
