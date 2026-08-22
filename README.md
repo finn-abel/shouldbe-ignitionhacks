@@ -42,7 +42,8 @@ cp .env.example .env            # first time only
 npm run dev
 ```
 
-Verify: <http://localhost:5173> → the placeholder page.
+Verify: <http://localhost:5173> → type a meeting, press Analyze, see it costed and judged.
+The backend must be running too; the frontend calls it cross-origin at `VITE_API_BASE_URL`.
 Use `localhost`, not `127.0.0.1` — the Vite dev server binds IPv6 loopback.
 
 ## Tests

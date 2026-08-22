@@ -1,0 +1,318 @@
+.stage {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-section);
+  padding: var(--gap-section) clamp(1.25rem, 5vw, 3.5rem);
+  max-width: 76rem;
+  margin-inline: auto;
+}
+
+.dashboard { display: flex; flex-direction: column; gap: var(--gap-section); }
+.dashboard__loading { color: var(--ink-faint); font-size: var(--text-sm); }
+
+/* ---------------------------------------------------------------- headline */
+
+.headline {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding-left: var(--gap);
+  border-left: 3px solid var(--rule-strong);
+}
+
+.headline--over { border-left-color: var(--leak); }
+
+.headline__figure {
+  margin: 0;
+  font-size: var(--text-figure);
+  font-weight: 620;
+  letter-spacing: -0.05em;
+  line-height: 0.94;
+}
+
+.headline__verdict {
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  color: var(--ink-soft);
+  font-size: var(--text-lg);
+}
+
+.headline--over .headline__verdict strong { color: var(--leak); }
+
+.headline__delta {
+  padding: 0.1rem 0.4rem;
+  border-radius: var(--radius);
+  background: var(--paper-sunken);
+  color: var(--ink-faint);
+  font-size: var(--text-xs);
+}
+
+/* ------------------------------------------------------------- money tiles */
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10.5rem, 1fr));
+  gap: 2px;                       /* a surface gap, not a border, between figures */
+  background: var(--rule);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-card);
+  overflow: hidden;
+}
+
+.tile {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  padding: var(--gap-tight) var(--gap);
+  background: var(--paper-raised);
+}
+
+.tile--total { background: var(--paper-sunken); }
+
+.tile__label {
+  margin: 0;
+  font-size: var(--text-xs);
+  font-weight: 620;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.tile__figure { margin: 0; font-size: var(--text-xl); font-weight: 620; letter-spacing: -0.03em; }
+.tile__note { margin: 0; font-size: var(--text-xs); color: var(--ink-faint); }
+
+/* Colour marks only the two figures worth acting on; the rest wear ink. */
+.tile--leak .tile__figure { color: var(--leak); }
+.tile--reclaim .tile__figure { color: var(--reclaim); }
+
+/* ------------------------------------------------------------------ panels */
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-tight);
+}
+
+.panel__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--gap-tight);
+  flex-wrap: wrap;
+  padding-bottom: var(--gap-hair);
+  border-bottom: 1px solid var(--rule);
+}
+
+.panel__head h2 { font-size: var(--text-lg); }
+.panel__count { font-size: var(--text-xs); color: var(--ink-faint); }
+
+/* ------------------------------------------------------------------- chart */
+
+.chart { margin: 0; position: relative; }
+
+.chart__svg { display: block; width: 100%; height: clamp(9rem, 22vw, 12.5rem); }
+.chart__empty { color: var(--ink-faint); font-size: var(--text-sm); }
+
+.chart__grid { stroke: var(--rule); stroke-width: 1; vector-effect: non-scaling-stroke; }
+
+.chart__area { fill: var(--ink); opacity: 0.06; }
+
+.chart__line {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.chart__dot {
+  fill: var(--ink);
+  stroke: var(--paper-raised);
+  stroke-width: 2;                /* a surface ring, not a border */
+  vector-effect: non-scaling-stroke;
+  transition: r var(--duration) var(--ease);
+}
+
+.chart__crosshair {
+  stroke: var(--rule-strong);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.chart__hit { fill: transparent; cursor: crosshair; }
+
+.chart__scale {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--gap-tight);
+  padding-top: var(--gap-hair);
+  border-top: 1px solid var(--rule);
+  font-size: var(--text-xs);
+  color: var(--ink-faint);
+}
+
+.chart__scale span:first-child { color: var(--ink-soft); }
+
+.chart__tooltip {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 0.45rem;
+  margin: 0;
+  padding: 0.25rem 0.6rem;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--paper-raised);
+  box-shadow: var(--shadow-card);
+  font-size: var(--text-xs);
+  color: var(--ink-faint);
+}
+
+.chart__tooltip strong { color: var(--ink); font-size: var(--text-sm); }
+
+/* ------------------------------------------------------------------ ledger */
+
+.ledger { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.ledger__empty { color: var(--ink-faint); font-size: var(--text-sm); }
+
+.entry { border-bottom: 1px solid var(--rule); }
+
+.entry__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--gap-hair) var(--gap-tight);
+  width: 100%;
+  padding: 0.7rem 0.6rem 0.7rem 0.75rem;
+  border: 0;
+  border-left: 2px solid transparent;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--duration) var(--ease),
+              border-color var(--duration) var(--ease);
+}
+
+.entry__row:hover { background: var(--paper-sunken); }
+.entry--leak .entry__row:hover { border-left-color: var(--leak); }
+.entry--defend .entry__row:hover { border-left-color: var(--defend); }
+
+.entry__title {
+  grid-column: 1;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  font-weight: 560;
+  letter-spacing: -0.01em;
+}
+
+.entry__meta {
+  grid-column: 1;
+  grid-row: 2;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.entry__status { font-size: var(--text-xs); color: var(--ink-faint); }
+
+.entry__money {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.05rem;
+}
+
+.entry__cost { font-size: var(--text-lg); font-weight: 620; letter-spacing: -0.02em; }
+.entry__annual { font-size: var(--text-xs); color: var(--ink-faint); }
+
+/* The demo drill-down: the recurring meeting bleeding the most per year. */
+.entry--worst .entry__row {
+  border-left-color: var(--leak);
+  background: var(--leak-wash);
+}
+
+.entry--worst .entry__annual { color: var(--leak); font-weight: 620; }
+
+.entry__flag {
+  padding: 0.1rem 0.4rem;
+  border-radius: 999px;
+  background: var(--leak);
+  color: var(--paper);
+  font-size: 0.625rem;
+  font-weight: 680;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.entry--converted .entry__title { color: var(--ink-faint); }
+.entry--converted .entry__cost { color: var(--ink-faint); text-decoration: line-through; }
+
+.entry__detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-tight);
+  padding: 0 0.75rem var(--gap) 0.77rem;
+  animation: detail-in var(--duration) var(--ease) both;
+}
+
+@keyframes detail-in {
+  from { opacity: 0; transform: translateY(-3px); }
+  to { opacity: 1; transform: none; }
+}
+
+.entry__reasoning { margin: 0; max-width: 62ch; color: var(--ink-soft); font-size: var(--text-sm); }
+
+.entry__facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap);
+  margin: 0;
+}
+
+.entry__facts div { display: flex; flex-direction: column; gap: 0.05rem; }
+
+.entry__facts dt {
+  font-size: 0.6875rem;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.entry__facts dd { margin: 0; font-size: var(--text-sm); font-weight: 560; }
+
+/* --------------------------------------------------------------------- tabs */
+
+.masthead__nav { display: flex; gap: 0.15rem; margin-left: auto; }
+
+.tab {
+  padding: 0.35rem 0.75rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--ink-faint);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: color var(--duration) var(--ease), background var(--duration) var(--ease);
+}
+
+.tab:hover { color: var(--ink); background: var(--paper-sunken); }
+
+.tab[aria-current='page'] {
+  color: var(--ink);
+  background: var(--paper-sunken);
+  border-color: var(--rule);
+  font-weight: 560;
+}
