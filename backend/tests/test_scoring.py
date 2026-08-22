@@ -115,23 +115,172 @@ def test_stub_is_on_by_default(monkeypatch):
 
 
 @pytest.mark.parametrize("value", ["0", "false", "no", "off", ""])
-def test_switching_the_stub_off_reaches_the_real_seam(monkeypatch, value):
-    # Step 12 fills this in; until then the seam must be reached, not silently skipped.
+def test_switching_the_stub_off_reaches_the_real_provider(monkeypatch, value):
     monkeypatch.setenv("SHOULDBE_USE_STUB", value)
+    calls = []
+    monkeypatch.setattr(
+        scoring,
+        "_call_llm",
+        lambda prompt: calls.append(prompt)
+        or json.dumps(
+            {
+                "rubric": {
+                    "decision_pressure": 2,
+                    "collaboration_depth": 2,
+                    "interaction_value": 3,
+                    "meeting_fit": 3,
+                    "business_impact": 4,
+                },
+                "reasoning": "Status only; the weighted rubric is low.",
+                "alternative_email": "Subject: written update",
+            }
+        ),
+    )
 
-    with pytest.raises(NotImplementedError):
-        score_meeting(**STANDUP)
+    result = score_meeting(**STANDUP)
+
+    assert len(calls) == 1 and STANDUP["title"] in calls[0]
+    _assert_shape(result)
+    assert result["score"] == 3 and result["verdict"] == "email"
+
+
+def test_the_real_branch_is_never_reached_while_the_stub_is_on(monkeypatch):
+    monkeypatch.setenv("SHOULDBE_USE_STUB", "1")
+    monkeypatch.setattr(
+        scoring, "_call_llm", lambda prompt: pytest.fail("The stub must not call out.")
+    )
+
+    _assert_shape(score_meeting(**STANDUP))
+
+
+def test_a_missing_key_with_the_stub_off_says_so_plainly(monkeypatch):
+    monkeypatch.delenv("LLM_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("LLM_PROVIDER", raising=False)
+
+    with pytest.raises(RuntimeError, match="SHOULDBE_USE_STUB"):
+        scoring._call_llm("anything")
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [
+        RuntimeError("no key configured"),
+        ConnectionError("network is down"),
+        Exception("rate limited"),
+    ],
+)
+def test_a_failing_provider_never_breaks_the_pipeline(monkeypatch, failure):
+    # A meeting must still be costed and recorded when scoring falls over mid-demo.
+    monkeypatch.setenv("SHOULDBE_USE_STUB", "0")
+
+    def explode(prompt):
+        raise failure
+
+    monkeypatch.setattr(scoring, "_call_llm", explode)
+
+    result = score_meeting(**STANDUP)
+
+    _assert_shape(result)
+    assert result["verdict"] == "keep"
+    assert result["score"] == scoring.SCORE_NEUTRAL_FALLBACK
+    assert "could not be completed" in result["reasoning"]
+
+
+def test_a_refusal_is_treated_as_an_unusable_answer(monkeypatch):
+    # _call_llm returns "" on stop_reason == "refusal".
+    monkeypatch.setenv("SHOULDBE_USE_STUB", "0")
+    monkeypatch.setattr(scoring, "_call_llm", lambda prompt: "")
+
+    result = score_meeting(**STANDUP)
+
+    _assert_shape(result)
+    assert result["verdict"] == "keep"
 
 
 def test_prompt_carries_the_rubric_the_facts_and_the_cost():
     prompt = build_prompt(**STANDUP)
 
-    assert "COULD BE AN EMAIL" in prompt and "STAYS A MEETING" in prompt
+    assert "decision_pressure" in prompt and "35%" in prompt
+    assert "collaboration_depth" in prompt and "25%" in prompt
+    assert "interaction_value" in prompt and "20%" in prompt
     assert STANDUP["title"] in prompt
     assert "800.00" in prompt
     assert "WEEKLY" in prompt
     # The model is told the cost, but told to keep it out of the email it drafts.
     assert "must NOT mention cost" in prompt
+    assert "Do not return" in prompt and "final score or verdict" in prompt
+
+
+def test_weighted_rubric_calculates_the_final_score_and_verdict():
+    raw = json.dumps(
+        {
+            "rubric": {
+                "decision_pressure": 2,
+                "collaboration_depth": 2,
+                "interaction_value": 3,
+                "meeting_fit": 3,
+                "business_impact": 4,
+            },
+            "reasoning": "Decision pressure and live interaction are low.",
+            "alternative_email": "Subject: written update",
+        }
+    )
+
+    result = scoring._parse_analysis(raw)
+
+    _assert_shape(result)
+    assert result["score"] == 3
+    assert result["verdict"] == "email"
+
+
+def test_weighted_rubric_overrides_any_model_verdict():
+    raw = json.dumps(
+        {
+            "rubric": {
+                "decision_pressure": 9,
+                "collaboration_depth": 8,
+                "interaction_value": 8,
+                "meeting_fit": 7,
+                "business_impact": 7,
+            },
+            "score": 1,
+            "verdict": "email",
+            "reasoning": "The fixed rubric keeps this live.",
+            "alternative_email": "Subject: ignore me",
+        }
+    )
+
+    result = scoring._parse_analysis(raw)
+
+    _assert_shape(result)
+    assert result["score"] == 8
+    assert result["verdict"] == "keep"
+    assert result["alternative_email"] is None
+
+
+@pytest.mark.parametrize("bad_value", [-1, 11, 3.5, "3", True])
+def test_invalid_weighted_rubric_values_fall_back_to_neutral_keep(bad_value):
+    raw = json.dumps(
+        {
+            "rubric": {
+                "decision_pressure": bad_value,
+                "collaboration_depth": 2,
+                "interaction_value": 3,
+                "meeting_fit": 3,
+                "business_impact": 4,
+            },
+            "reasoning": "Decision pressure and live interaction are low.",
+            "alternative_email": "Subject: written update",
+        }
+    )
+
+    result = scoring._parse_analysis(raw)
+
+    _assert_shape(result)
+    assert result["score"] == scoring.SCORE_NEUTRAL_FALLBACK
+    assert result["verdict"] == "keep"
 
 
 # ------------------------------------------------- defensive parsing (never crash)

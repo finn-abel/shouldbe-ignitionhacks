@@ -155,3 +155,6 @@ __pycache__/
 *.py[cod]
 *.egg-info/
 .pytest_cache/
+
+SETUP.local.md
+PHASE_2.md

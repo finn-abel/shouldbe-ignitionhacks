@@ -34,3 +34,18 @@ class Status(Enum):
     ANALYZED = "analyzed"
     HELD = "held"
     CONVERTED = "converted"
+
+
+class OutboxStatus(Enum):
+    """Delivery state of one queued outbound reply.
+
+    QUEUED — not yet accepted by the mail provider. Covers every recoverable state:
+             not configured, domain not verified yet, rate limited, provider down. All
+             of them resolve without anyone touching this row, so it waits.
+    SENT   — the provider accepted it.
+    FAILED — permanently undeliverable, or out of attempts. Never retried again.
+    """
+
+    QUEUED = "queued"
+    SENT = "sent"
+    FAILED = "failed"

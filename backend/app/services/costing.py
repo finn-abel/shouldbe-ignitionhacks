@@ -7,6 +7,7 @@ Two privacy rules from doc 1 are structural here, not incidental:
   or can be asked for, one attendee's contribution.
 """
 
+import os
 from decimal import ROUND_HALF_UP, Decimal
 
 from app.enums import Tier
@@ -15,13 +16,23 @@ CENTS = Decimal("0.01")
 
 MINUTES_PER_HOUR = Decimal(60)
 
+# The most meeting time one occurrence can bill: a working day.
+#
+# A calendar is not only meetings. An .ics all-day event reads as 1440 minutes and a
+# week-long conference as 6240, and costing those literally puts a $21,600 "meeting" and a
+# $93,600 one on the books, which detonates the budget headline. The true duration is still
+# recorded on the meeting (doc 2 §4.4); this caps only what it is billed for.
+DEFAULT_MAX_BILLABLE_MINUTES = 8 * 60
+
 # Doc 2 §4.2 defaults. Each user may override these; they are the starting point, not a
-# hardcoded basis.
+# hardcoded basis. The federal reference defaults use salary-band midpoints converted to
+# hourly equivalents with a 37.5-hour work week (1,950 hours/year):
+# IC=IT-02, Senior=IT-03, Manager=IT-04, Exec=EX-03 / Director General.
 DEFAULT_TIER_RATES: dict[Tier, Decimal] = {
-    Tier.IC: Decimal("75"),
-    Tier.SENIOR: Decimal("110"),
-    Tier.MANAGER: Decimal("150"),
-    Tier.EXEC: Decimal("250"),
+    Tier.IC: Decimal("48.96"),
+    Tier.SENIOR: Decimal("58.27"),
+    Tier.MANAGER: Decimal("66.79"),
+    Tier.EXEC: Decimal("96.27"),
 }
 
 # Occurrences per year by recurrence frequency. DAILY counts workdays (260), not calendar
@@ -33,6 +44,27 @@ OCCURRENCES_PER_YEAR: dict[str, int] = {
     "MONTHLY": 12,
     "YEARLY": 1,
 }
+
+
+def max_billable_minutes() -> int:
+    """The billing cap, overridable per deployment."""
+    raw = os.getenv("SHOULDBE_MAX_BILLABLE_MINUTES")
+    if not raw:
+        return DEFAULT_MAX_BILLABLE_MINUTES
+    try:
+        return max(1, int(raw))
+    except ValueError:
+        return DEFAULT_MAX_BILLABLE_MINUTES
+
+
+def billable_minutes(duration_minutes: int) -> int:
+    """How much of a meeting's length is charged for. Applies to every door."""
+    return min(duration_minutes, max_billable_minutes())
+
+
+def is_clamped(duration_minutes: int) -> bool:
+    """Whether this meeting is longer than a day's worth of billable time."""
+    return duration_minutes > max_billable_minutes()
 
 
 def _to_money(value: Decimal) -> Decimal:
@@ -59,7 +91,8 @@ def meeting_cost(
     """Aggregate cost of one occurrence: Σ(attendee tier rate) × hours.
 
     `attendee_tiers` carries one entry per attendee, so its length is the head count that
-    drives cost. An empty list costs nothing.
+    drives cost. An empty list costs nothing. Time beyond `max_billable_minutes()` is not
+    charged for — see the constant for why.
     """
     if duration_minutes < 0:
         raise ValueError(f"duration_minutes must not be negative, got {duration_minutes}.")
@@ -73,7 +106,7 @@ def meeting_cost(
             raise ValueError(f"No hourly rate configured for tier {resolved.value!r}.")
         hourly_total += Decimal(rates[resolved])
 
-    hours = Decimal(duration_minutes) / MINUTES_PER_HOUR
+    hours = Decimal(billable_minutes(duration_minutes)) / MINUTES_PER_HOUR
     return _to_money(hourly_total * hours)
 
 

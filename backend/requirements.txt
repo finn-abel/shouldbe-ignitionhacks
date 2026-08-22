@@ -14,7 +14,13 @@ ics
 pytest
 httpx          # FastAPI TestClient dependency
 
+# --- auth (step 11) ---
+authlib               # Google OAuth (openid email profile scopes only)
+itsdangerous          # signs the session cookie
+
+# --- LLM scoring (step 12) ---
+openai                # default real scoring provider
+anthropic             # provider SDK; only used when SHOULDBE_USE_STUB is off
+
 # --- NOT YET USED — added in the step that needs them ---
-# authlib               # Google OAuth            (step 11)
 # postmarker            # Postmark in/outbound    (step 13)
-# anthropic             # LLM provider SDK        (step 12)

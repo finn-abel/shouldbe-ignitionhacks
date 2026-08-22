@@ -7,8 +7,8 @@ drafts email alternatives.
 
 *Ignition Hacks V.7 · Fintech track*
 
-Design docs live in `shouldbe-docs/` (overview, architecture, build plan, dev log).
-The architecture doc is the source of truth for structure.
+**Getting it running: [RUNBOOK.md](RUNBOOK.md)** — setup, commands, variables, and what to do
+when something breaks.
 
 ## Layout
 
@@ -30,8 +30,15 @@ python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env            # first time only
+python -m app.seed              # seeds the shared guest with a month of meetings
 uvicorn app.main:app --reload --port 8000
 ```
+
+Re-run the seed any time to reset the guest's numbers before a demo.
+
+The project bootstraps its schema with create-all rather than migrations, so after a change
+to the models delete the local database and re-seed: `rm backend/shouldbe.db` then run the
+seed again.
 
 Verify: <http://localhost:8000/health> → `{"status":"ok"}`
 API docs: <http://localhost:8000/docs>
@@ -45,7 +52,10 @@ cp .env.example .env            # first time only
 npm run dev
 ```
 
-Verify: <http://localhost:5173> → the placeholder page.
+Verify: <http://localhost:5173> → "Continue as guest" opens the seeded dashboard.
+Google sign-in needs `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`; without them that button
+returns a clear "not configured" message and guest entry still works.
+The backend must be running too; the frontend calls it cross-origin at `VITE_API_BASE_URL`.
 Use `localhost`, not `127.0.0.1` — the Vite dev server binds IPv6 loopback.
 
 ## Tests
@@ -54,12 +64,67 @@ Use `localhost`, not `127.0.0.1` — the Vite dev server binds IPv6 loopback.
 cd backend && ./venv/bin/pytest
 ```
 
-One-off scripts against the app package need the same path: `PYTHONPATH=. ./venv/bin/python script.py`.
-
 CI runs the same tests, boots the backend to check `/health`, and builds the frontend —
 on pushes to `main` and on pull requests into it. See `.github/workflows/ci.yml`.
+
+## Real LLM scoring
+
+Everything runs offline on a deterministic stub by default. OpenAI is the default real
+provider. Put an OpenAI Platform API key in `backend/.env`, validate it in isolation,
+then flip the stub off:
+
+```env
+LLM_PROVIDER=openai
+OPENAI_MODEL=gpt-5-nano
+OPENAI_API_KEY=sk-...
+LLM_MAX_TOKENS=1200
+SHOULDBE_USE_STUB=0
+```
+
+```bash
+cd backend
+./venv/bin/python spike_llm.py   # one call, prints the analysis
+./venv/bin/uvicorn app.main:app --reload --port 8000
+```
+
+If the provider errors mid-demo, set `SHOULDBE_USE_STUB=1` and restart — the stub is never removed.
+
+## Scoring rubric
+
+The final necessity score is calculated by the backend from a fixed 100% weighted
+rubric: decision pressure 35%, collaboration depth 25%, interaction value 20%,
+meeting fit 10%, and business impact 10%. The LLM only supplies the category scores
+and reasoning; it does not get to choose the final score or verdict.
+
+## Door A — invite ShouldBe to a meeting
+
+Invites are **received** by Postmark (an MX on `invite.<domain>` → `inbound.postmarkapp.com`,
+which POSTs the parsed `.ics` to `/webhook/inbound-email?token=<secret>`). Replies are **sent**
+by Resend, which can reach any recipient once the domain is verified in DNS. Full setup,
+including the DNS records, is in `SETUP.local.md` §6.
+
+Each user gets a plus-addressed invite address (`ledger+ab12cd@…`, shown in Settings). An
+invite is attributed by routing token, then organizer address, then claimed company domain,
+then the shared guest — so an emailed invite lands on the right ledger rather than always on
+the demo one.
+
+The reply is not sent inline. It is written to an `email_outbox` row in the same commit as the
+meeting and drained afterwards, so a failed send is retried rather than lost. With nothing
+configured the webhook still parses, scores and records the invite, and the reply waits in the
+outbox until sending works. `GET /api/outbox` shows the queue.
+
+To exercise the same path from a saved `.ics` with no email at all:
+
+```bash
+cd backend && ./venv/bin/python -m app.services.ics_adapter invite.ics you@yourdomain
+```
 
 ## Environment
 
 Both services read a local `.env` (git-ignored); `.env.example` is the committed template.
+
+**When you deploy**, set `SESSION_COOKIE_SAMESITE=none` and `SESSION_COOKIE_SECURE=true` on the
+backend. The frontend and API are the same site on localhost but not on Render, and a
+`SameSite=Lax` cookie is not sent cross-site — leave the defaults and every deployed API call
+answers 401.
 Full variable reference: `shouldbe-docs/shouldbe-04-dev-log.md`.

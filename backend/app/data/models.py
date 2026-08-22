@@ -5,6 +5,7 @@ without importing the database layer.
 """
 
 from datetime import datetime, timezone
+from decimal import Decimal
 
 from sqlalchemy import (
     JSON,
@@ -19,9 +20,39 @@ from sqlalchemy import (
     UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.types import TypeDecorator
 
 from app.data.db import Base
-from app.enums import Status, Tier, Verdict
+from app.enums import OutboxStatus, Status, Tier, Verdict
+
+class UtcDateTime(TypeDecorator):
+    """Timestamps that are UTC-aware on the way in and on the way out, on any dialect.
+
+    Postgres returns an aware datetime from a `timestamptz` column; SQLite has no
+    timezone storage and hands back a naive one. Left alone, that divergence means code
+    comparing a stored timestamp against `datetime.now(timezone.utc)` works in the cloud
+    and raises "can't compare offset-naive and offset-aware datetimes" locally — the
+    exact class of SQLite/Postgres surprise doc 4 task 4-B warns about. The burn-rate
+    bucketing and the current-month budget comparison both do that comparison.
+    """
+
+    impl = DateTime(timezone=True)
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value.astimezone(timezone.utc)
+
+    def process_result_value(self, value, dialect):
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value.astimezone(timezone.utc)
+
 
 # Money is stored at cent precision. Postgres enforces this; SQLite is lax about it
 # (doc 4 task 4-B) — keep the column type authoritative rather than the dialect.
@@ -60,9 +91,7 @@ class User(Base):
     display_name: Mapped[str] = mapped_column(String(255), nullable=False)
     google_sub: Mapped[str | None] = mapped_column(String(255), nullable=True, unique=True)
     is_guest: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=_utcnow
-    )
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime, nullable=False, default=_utcnow)
 
     tier_rates: Mapped[list["RoleTierRate"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
@@ -84,7 +113,7 @@ class RoleTierRate(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
     tier: Mapped[Tier] = _enum_column(Tier, nullable=False)
-    hourly_rate: Mapped[float] = mapped_column(MONEY, nullable=False)
+    hourly_rate: Mapped[Decimal] = mapped_column(MONEY, nullable=False)
 
     user: Mapped[User] = relationship(back_populates="tier_rates")
 
@@ -98,7 +127,7 @@ class Budget(Base):
     user_id: Mapped[int] = mapped_column(
         ForeignKey("users.id"), nullable=False, unique=True, index=True
     )
-    monthly_amount: Mapped[float] = mapped_column(MONEY, nullable=False)
+    monthly_amount: Mapped[Decimal] = mapped_column(MONEY, nullable=False)
 
     user: Mapped[User] = relationship(back_populates="budget")
 
@@ -111,14 +140,23 @@ class Meeting(Base):
     """
 
     __tablename__ = "meetings"
+    __table_args__ = (
+        # Door A's at-most-once guarantee. Postmark redelivers an inbound message up to
+        # six times over ~51 minutes — including when the endpoint did the work but
+        # answered too slowly — so the database, not the handler, is what makes a repeat
+        # delivery harmless. Null for manual-form meetings, and SQL treats each NULL as
+        # distinct, so Door B is unconstrained.
+        UniqueConstraint("user_id", "source_key", name="uq_meeting_source_per_user"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    source_key: Mapped[str | None] = mapped_column(String(512), nullable=True)
 
     # --- invite facts (populated by whichever door's adapter) ---
     title: Mapped[str] = mapped_column(String(512), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False, default="")
-    start: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    start: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True)
     duration_minutes: Mapped[int] = mapped_column(
         Integer, nullable=False, default=DEFAULT_DURATION_MINUTES
     )
@@ -129,8 +167,8 @@ class Meeting(Base):
     recurrence_freq: Mapped[str | None] = mapped_column(String(32), nullable=True)
 
     # --- computed financials ---
-    cost: Mapped[float] = mapped_column(MONEY, nullable=False)
-    annualized_cost: Mapped[float | None] = mapped_column(MONEY, nullable=True)
+    cost: Mapped[Decimal] = mapped_column(MONEY, nullable=False)
+    annualized_cost: Mapped[Decimal | None] = mapped_column(MONEY, nullable=True)
 
     # --- AI output ---
     score: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -140,9 +178,81 @@ class Meeting(Base):
 
     # --- lifecycle / money state ---
     status: Mapped[Status] = _enum_column(Status, nullable=False, default=Status.ANALYZED)
-    reclaimed_savings: Mapped[float] = mapped_column(MONEY, nullable=False, default=0)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=_utcnow, index=True
-    )
+    reclaimed_savings: Mapped[Decimal] = mapped_column(MONEY, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime, nullable=False, default=_utcnow, index=True)
 
     user: Mapped[User] = relationship(back_populates="meetings")
+
+
+class InboundRoute(Base):
+    """How an emailed invite finds its owner (doc 2 §5.2's "known edge", closed).
+
+    Door A used to attribute every invite to the shared guest, because an inbound email
+    carries no session. This row is what an invite is matched against instead. One per
+    user, created lazily so an existing database gains routing without a re-seed.
+
+    Two independent handles, because they fail in opposite directions:
+
+    - `token` is explicit and unambiguous — it rides in the address the organizer invited
+      (`ledger+ab12cd@...`), so it works no matter which account sent the invite.
+    - `domain` is implicit and zero-effort — anyone at the company gets attributed without
+      knowing ShouldBe exists. It is nullable, unique, and MUST NOT be a public mailbox
+      provider: claiming `gmail.com` would capture every gmail organizer's invites.
+      `app.services.inbound_routing` enforces that; the column only enforces uniqueness.
+    """
+
+    __tablename__ = "inbound_routes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id"), nullable=False, unique=True, index=True
+    )
+    token: Mapped[str] = mapped_column(String(16), nullable=False, unique=True, index=True)
+    domain: Mapped[str | None] = mapped_column(String(255), nullable=True, unique=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime, nullable=False, default=_utcnow)
+
+    user: Mapped[User] = relationship()
+
+
+class EmailOutbox(Base):
+    """One outbound reply, durable (the transactional outbox pattern).
+
+    The reply used to be a bare `BackgroundTasks` call: if Postmark was unreachable the
+    send was logged and lost, and because a redelivered invite hits the idempotency guard
+    and never re-sends, nothing would ever try again. So the reply is now a row, written
+    in the *same commit* as its `Meeting` — the meeting and its pending reply either both
+    exist or neither does.
+
+    The body is rendered at enqueue time rather than at send time. `compose_reply` needs a
+    `MeetingAnalysis`, which only exists in the request that scored the invite; storing the
+    finished text means the drain needs nothing but this row.
+
+    This is also what makes a brand-new Postmark account survivable. Until Postmark
+    manually approves an account it refuses any recipient outside your own verified
+    domains — so those replies simply stay QUEUED and send themselves once approval lands.
+    """
+
+    __tablename__ = "email_outbox"
+    __table_args__ = (
+        # At most one reply per meeting, for the same reason `uq_meeting_source_per_user`
+        # exists: Postmark redelivers an inbound message up to six times, and the database
+        # rather than the handler is what makes a repeat harmless.
+        UniqueConstraint("meeting_id", name="uq_outbox_per_meeting"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    meeting_id: Mapped[int] = mapped_column(ForeignKey("meetings.id"), nullable=False)
+
+    to_email: Mapped[str] = mapped_column(String(320), nullable=False)
+    subject: Mapped[str] = mapped_column(String(512), nullable=False)
+    text_body: Mapped[str] = mapped_column(Text, nullable=False)
+
+    status: Mapped[OutboxStatus] = _enum_column(
+        OutboxStatus, nullable=False, default=OutboxStatus.QUEUED, index=True
+    )
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime, nullable=False, default=_utcnow, index=True)
+    sent_at: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True)
+
+    meeting: Mapped[Meeting] = relationship()
