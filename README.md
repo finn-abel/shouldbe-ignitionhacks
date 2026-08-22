@@ -1,133 +1,334 @@
+<p align="center">
+  <img src="frontend/public/shouldbe-logo.svg" alt="ShouldBe logo" width="260" />
+</p>
+
 # ShouldBe
 
 [![CI](https://github.com/finn-abel/shouldbe-ignitionhacks/actions/workflows/ci.yml/badge.svg)](https://github.com/finn-abel/shouldbe-ignitionhacks/actions/workflows/ci.yml)
 
-Meeting spend management — scores meetings for necessity, computes their dollar cost, and
-drafts email alternatives.
+ShouldBe is a meeting spend-management application that turns calendar time into a
+financial control surface. It prices meetings from privacy-preserving blended role rates,
+scores whether each meeting genuinely needs to happen live, drafts email replacements for
+low-necessity meetings, and tracks monthly meeting budgets by user, team, or department.
 
-*Ignition Hacks V.7 · Fintech track*
+Built for **Ignition Hacks V.7 · Fintech track**, ShouldBe moves beyond passive
+analytics: it gives teams a ledger of meeting spend, budget guardrails before new
+meetings are recorded, and a practical path to reclaim avoidable meeting costs.
 
-**Getting it running: [RUNBOOK.md](RUNBOOK.md)** — setup, commands, variables, and what to do
-when something breaks.
+## Product Overview
 
-**Getting it deployed: [DEPLOY.md](DEPLOY.md)** — Render blueprint, the cross-site cookie
-trap, and the optional keys.
+Modern teams spend real money in meetings, but that spend is usually invisible until it
+has already happened. ShouldBe makes the cost visible at the moment a meeting is created
+or received.
 
-## Layout
+Core capabilities:
 
+- **Meeting cost calculation** from configurable blended hourly rates for role tiers.
+- **Necessity scoring** using a fixed weighted rubric for decision pressure,
+  collaboration depth, interaction value, meeting fit, and business impact.
+- **AI-assisted analysis** with an offline deterministic stub by default and optional
+  OpenAI or Anthropic scoring for production demos.
+- **Budget guardrails** for user, team, and department budgets, including 50%, 80%, and
+  100% threshold warnings.
+- **Remaining meeting budget** and current-month spend on the dashboard.
+- **Email replacement drafts** for meetings that can move async.
+- **Inbound calendar invite processing** through the Email Door, with idempotent webhook
+  handling and retryable outbound replies.
+- **Guest mode and optional Google sign-in** so the app can be demoed immediately.
+
+## How It Works
+
+1. A meeting enters ShouldBe from the manual analysis form or from an emailed `.ics`
+   invite.
+2. The backend prices the meeting from the configured role-tier rates.
+3. The scoring service evaluates whether the meeting should stay live or become an email.
+4. Budget guardrails compare projected monthly spend against the active user, team, or
+   department budget.
+5. The meeting is written to the ledger, where the dashboard tracks total spend,
+   necessary spend, avoidable spend, reclaimed savings, and remaining budget.
+
+The backend owns all financial logic. The frontend never recomputes dollar totals; it
+renders API responses from the FastAPI service.
+
+## Repository Structure
+
+```text
+.
+├── backend/                  FastAPI API, scoring, cost model, persistence, email routes
+│   ├── app/
+│   │   ├── data/             SQLAlchemy models and database access
+│   │   ├── routes/           Thin HTTP route handlers
+│   │   ├── schemas/          Pydantic request and response models
+│   │   └── services/         Costing, scoring, money, email, and .ics logic
+│   └── tests/                Backend unit and integration tests
+├── frontend/                 React + Vite dashboard
+│   ├── public/               Logo and static assets
+│   └── src/                  App, components, API client, styles
+├── render.yaml               Render blueprint for production deployment
+├── RUNBOOK.md                Operational commands and troubleshooting
+├── SETUP.local.md            Full local integration checklist
+└── DEPLOY.md                 Render deployment guide
 ```
-/backend    FastAPI service — routes (thin) → services (all logic) → data (persistence)
-/frontend   React dashboard (Vite)
-```
 
-## Requirements
+## Tech Stack
+
+### Backend
 
 - Python 3.11+
-- Node 18+
+- FastAPI
+- SQLAlchemy 2
+- Pydantic 2
+- SQLite locally, Postgres in production
+- Pytest
+- Optional OpenAI or Anthropic SDKs for real LLM scoring
+- Optional Postmark and Resend for inbound invites and outbound replies
 
-## Run the backend
+### Frontend
+
+- Node 18+
+- React 19
+- Vite 7
+- Plain CSS organized by app surface
+
+## Prerequisites
+
+Install:
+
+- Python 3.11 or newer
+- Node.js 18 or newer
+- npm
+
+Optional for full integrations:
+
+- OpenAI Platform API key or Anthropic API key
+- Google OAuth client credentials
+- Postmark inbound email setup
+- Resend outbound email setup
+- Render account for deployment
+
+## Local Setup
+
+### 1. Clone the Repository
+
+```bash
+git clone https://github.com/finn-abel/shouldbe-ignitionhacks.git
+cd shouldbe-ignitionhacks
+```
+
+### 2. Configure the Backend
 
 ```bash
 cd backend
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env            # first time only
-python -m app.seed              # seeds the shared guest with a month of meetings
-uvicorn app.main:app --reload --port 8000
+cp .env.example .env
+python -m app.seed
+uvicorn app.main:app --reload --host localhost --port 8000
 ```
 
-Re-run the seed any time to reset the guest's numbers before a demo.
+The seed command creates the shared guest account and a realistic demo ledger. Re-run it
+when you want to reset the guest dashboard before a demo.
 
-The project bootstraps its schema with create-all rather than migrations, so after a change
-to the models delete the local database and re-seed: `rm backend/shouldbe.db` then run the
-seed again.
+Backend health check:
 
-Verify: <http://localhost:8000/health> → `{"status":"ok"}`
-API docs: <http://localhost:8000/docs>
+```bash
+curl -fsS http://localhost:8000/health
+```
 
-## Run the frontend
+Expected response:
+
+```json
+{"status":"ok"}
+```
+
+API documentation:
+
+```text
+http://localhost:8000/docs
+```
+
+### 3. Configure the Frontend
+
+In a second terminal:
 
 ```bash
 cd frontend
 npm install
-cp .env.example .env            # first time only
+cp .env.example .env
 npm run dev
 ```
 
-Verify: <http://localhost:5173> → "Continue as guest" opens the seeded dashboard.
-Google sign-in needs `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`; without them that button
-returns a clear "not configured" message and guest entry still works.
-The backend must be running too; the frontend calls it cross-origin at `VITE_API_BASE_URL`.
-Use `localhost`, not `127.0.0.1` — the Vite dev server binds IPv6 loopback.
+Open:
 
-## Tests
-
-```bash
-cd backend && ./venv/bin/pytest
+```text
+http://localhost:5173
 ```
 
-CI runs the same tests, boots the backend to check `/health`, and builds the frontend —
-on pushes to `main` and on pull requests into it. See `.github/workflows/ci.yml`.
+Press **Continue as guest** to open the seeded dashboard.
 
-## Real LLM scoring
+## Environment Variables
 
-Everything runs offline on a deterministic stub by default. OpenAI is the default real
-provider. Put an OpenAI Platform API key in `backend/.env`, validate it in isolation,
-then flip the stub off:
+Both services use git-ignored local `.env` files. Start from the committed templates:
+
+```bash
+cp backend/.env.example backend/.env
+cp frontend/.env.example frontend/.env
+```
+
+Important local defaults:
+
+| Variable | Service | Purpose |
+|---|---|---|
+| `DATABASE_URL` | Backend | SQLite locally or Postgres in production |
+| `FRONTEND_ORIGIN` | Backend | CORS origin for the React app |
+| `FRONTEND_URL` | Backend | Where OAuth redirects return |
+| `SESSION_SECRET` | Backend | Signs the session cookie |
+| `SESSION_COOKIE_SAMESITE` | Backend | `lax` locally, `none` in production |
+| `SESSION_COOKIE_SECURE` | Backend | `false` locally, `true` in production |
+| `SHOULDBE_USE_STUB` | Backend | `1` for offline scoring, `0` for real LLM scoring |
+| `OPENAI_API_KEY` | Backend | Optional real OpenAI scoring |
+| `ANTHROPIC_API_KEY` | Backend | Optional Anthropic scoring |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Backend | Optional Google sign-in |
+| `POSTMARK_TOKEN` / `SHOULDBE_INBOX` | Backend | Optional inbound invite processing |
+| `RESEND_API_KEY` / `RESEND_FROM` | Backend | Optional outbound email replies |
+| `VITE_API_BASE_URL` | Frontend | Backend API base URL |
+
+For deployed environments, set:
 
 ```env
+SESSION_COOKIE_SAMESITE=none
+SESSION_COOKIE_SECURE=true
+```
+
+Without those production cookie settings, cross-site API calls from the deployed frontend
+will not include the session cookie and the API will respond with `401`.
+
+## Running Tests
+
+Run the backend test suite:
+
+```bash
+cd backend
+source venv/bin/activate
+pytest
+```
+
+Build the frontend:
+
+```bash
+cd frontend
+npm run build
+```
+
+CI runs the backend tests, checks the backend health endpoint, and builds the frontend on
+pushes and pull requests. See `.github/workflows/ci.yml`.
+
+## Real LLM Scoring
+
+ShouldBe works offline by default with a deterministic scoring stub. This is intentional:
+the demo does not require an API key and will not fail because of a model provider outage.
+
+To enable OpenAI scoring:
+
+```env
+SHOULDBE_USE_STUB=0
 LLM_PROVIDER=openai
 OPENAI_MODEL=gpt-5-nano
 OPENAI_API_KEY=sk-...
 LLM_MAX_TOKENS=1200
-SHOULDBE_USE_STUB=0
 ```
+
+Validate one scoring call:
 
 ```bash
 cd backend
-./venv/bin/python spike_llm.py   # one call, prints the analysis
-./venv/bin/uvicorn app.main:app --reload --port 8000
+source venv/bin/activate
+python spike_llm.py
 ```
 
-If the provider errors mid-demo, set `SHOULDBE_USE_STUB=1` and restart — the stub is never removed.
+If the AI provider fails, rate-limits, refuses, or runs out of output tokens, ShouldBe
+records a neutral keep verdict and returns a specific warning to the UI instead of
+silently hiding the failure.
 
-## Scoring rubric
+## Scoring Rubric
 
-The final necessity score is calculated by the backend from a fixed 100% weighted
-rubric: decision pressure 35%, collaboration depth 25%, interaction value 20%,
-meeting fit 10%, and business impact 10%. The LLM only supplies the category scores
-and reasoning; it does not get to choose the final score or verdict.
+The LLM does not decide the final verdict directly. It returns category scores and
+reasoning; the backend calculates the final score from a fixed weighted rubric:
 
-## Door A — invite ShouldBe to a meeting
+| Category | Weight |
+|---|---:|
+| Decision pressure | 35% |
+| Collaboration depth | 25% |
+| Interaction value | 20% |
+| Meeting fit | 10% |
+| Business impact | 10% |
 
-Invites are **received** by Postmark (an MX on `invite.<domain>` → `inbound.postmarkapp.com`,
-which POSTs the parsed `.ics` to `/webhook/inbound-email?token=<secret>`). Replies are **sent**
-by Resend, which can reach any recipient once the domain is verified in DNS. Full setup,
-including the DNS records, is in `SETUP.local.md` §6.
+Scores from 1 to 4 are treated as meetings that could become email. Scores from 5 to 10
+are kept live. Ambiguous meetings are deliberately defended rather than over-flagged.
 
-Each user gets a plus-addressed invite address (`ledger+ab12cd@…`, shown in Settings). An
-invite is attributed by routing token, then organizer address, then claimed company domain,
-then the shared guest — so an emailed invite lands on the right ledger rather than always on
-the demo one.
+## Budget Guardrails
 
-The reply is not sent inline. It is written to an `email_outbox` row in the same commit as the
-meeting and drained afterwards, so a failed send is retried rather than lost. With nothing
-configured the webhook still parses, scores and records the invite, and the reply waits in the
-outbox until sending works. `GET /api/outbox` shows the queue.
+ShouldBe supports configurable monthly budgets by:
 
-To exercise the same path from a saved `.ics` with no email at all:
+- User
+- Team
+- Department
+
+The active budget scope controls the dashboard headline and the pre-analysis guardrail
+check. Before a meeting is recorded, the backend projects the meeting cost against the
+current monthly spend and warns when the meeting would cross:
+
+- 50% budget usage
+- 80% budget usage
+- 100% budget usage
+- Any over-budget state
+
+The dashboard shows current spend, budget usage, and remaining meeting budget for the
+active scope.
+
+## Email Door
+
+The Email Door lets a user invite ShouldBe to a calendar event like a coworker. Each user
+receives a plus-addressed invite address such as:
+
+```text
+ledger+ab12cd@your-domain.example
+```
+
+The token routes the invite to the correct ledger. Users can also claim a company domain
+so future invites organized by that domain are attributed correctly.
+
+Inbound email is optional. When email is not configured, the manual analysis flow and
+dashboard still work normally.
+
+## Deployment
+
+The repository includes a Render blueprint in `render.yaml` for:
+
+- Postgres database
+- FastAPI backend service
+- Static React frontend
+
+Deployment instructions are in [DEPLOY.md](DEPLOY.md). Local integration details are in
+[SETUP.local.md](SETUP.local.md). Operational troubleshooting is in [RUNBOOK.md](RUNBOOK.md).
+
+## Useful Commands
 
 ```bash
-cd backend && ./venv/bin/python -m app.services.ics_adapter invite.ics you@yourdomain
+# Backend
+cd backend
+source venv/bin/activate
+uvicorn app.main:app --reload --host localhost --port 8000
+pytest
+python -m app.seed
+
+# Frontend
+cd frontend
+npm run dev
+npm run build
 ```
 
-## Environment
+## License
 
-Both services read a local `.env` (git-ignored); `.env.example` is the committed template.
-
-**When you deploy**, set `SESSION_COOKIE_SAMESITE=none` and `SESSION_COOKIE_SECURE=true` on the
-backend. The frontend and API are the same site on localhost but not on Render, and a
-`SameSite=Lax` cookie is not sent cross-site — leave the defaults and every deployed API call
-answers 401. [`render.yaml`](render.yaml) sets both; see [DEPLOY.md](DEPLOY.md).
-Full variable reference: `shouldbe-docs/shouldbe-04-dev-log.md`.
+This project is released under the terms in [LICENSE](LICENSE).
