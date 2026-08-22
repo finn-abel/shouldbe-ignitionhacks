@@ -25,12 +25,14 @@ MINUTES_PER_HOUR = Decimal(60)
 DEFAULT_MAX_BILLABLE_MINUTES = 8 * 60
 
 # Doc 2 §4.2 defaults. Each user may override these; they are the starting point, not a
-# hardcoded basis.
+# hardcoded basis. The federal reference defaults use salary-band midpoints converted to
+# hourly equivalents with a 37.5-hour work week (1,950 hours/year):
+# IC=IT-02, Senior=IT-03, Manager=IT-04, Exec=EX-03 / Director General.
 DEFAULT_TIER_RATES: dict[Tier, Decimal] = {
-    Tier.IC: Decimal("75"),
-    Tier.SENIOR: Decimal("110"),
-    Tier.MANAGER: Decimal("150"),
-    Tier.EXEC: Decimal("250"),
+    Tier.IC: Decimal("48.96"),
+    Tier.SENIOR: Decimal("58.27"),
+    Tier.MANAGER: Decimal("66.79"),
+    Tier.EXEC: Decimal("96.27"),
 }
 
 # Occurrences per year by recurrence frequency. DAILY counts workdays (260), not calendar

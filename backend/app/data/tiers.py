@@ -42,7 +42,7 @@ def set_tier_rates(
 
     session.commit()
     # SessionLocal keeps objects alive past commit, so re-read through the DB rather
-    # than echoing the Python values back — otherwise PUT answers "75" where GET
-    # answers "75.00" for the same rate.
+    # than echoing the Python values back — otherwise PUT can answer with a raw decimal
+    # spelling that differs from the later GET for the same rate.
     session.expire_all()
     return get_tier_rates(session, user_id)

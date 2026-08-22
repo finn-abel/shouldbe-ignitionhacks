@@ -13,11 +13,27 @@ export default function AnalysisResult({ analysis }) {
   if (!analysis) {
     return (
       <aside className="result result--empty" aria-live="polite">
-        <p className="eyebrow">No analysis yet</p>
-        <p className="result__placeholder">
-          Describe a meeting and ShouldBe will price it, judge whether it needs to happen
-          live, and — if it doesn&apos;t — write the email that replaces it.
-        </p>
+        <div>
+          <p className="eyebrow">No analysis yet</p>
+          <p className="result__placeholder">
+            Describe a meeting and ShouldBe will price it, judge whether it needs to happen
+            live, and write the email that replaces it when it should not.
+          </p>
+        </div>
+        <dl className="result__empty-steps" aria-label="Analysis output">
+          <div>
+            <dt>Cost</dt>
+            <dd>Occurrence and annualized exposure</dd>
+          </div>
+          <div>
+            <dt>Score</dt>
+            <dd>Necessity from 1 to 10</dd>
+          </div>
+          <div>
+            <dt>Draft</dt>
+            <dd>Replacement email when async wins</dd>
+          </div>
+        </dl>
       </aside>
     );
   }
@@ -47,6 +63,21 @@ export default function AnalysisResult({ analysis }) {
           <strong className="figure">{formatMoney(analysis.annualized_cost)}</strong> a year
         </p>
       )}
+
+      <dl className="result__facts" aria-label="Analyzed meeting facts">
+        <div>
+          <dt>Attendees</dt>
+          <dd className="figure">{analysis.attendee_count}</dd>
+        </div>
+        <div>
+          <dt>Duration</dt>
+          <dd className="figure">{analysis.duration_minutes}m</dd>
+        </div>
+        <div>
+          <dt>Cadence</dt>
+          <dd>{analysis.is_recurring ? analysis.recurrence_freq?.toLowerCase() : 'one-off'}</dd>
+        </div>
+      </dl>
 
       <div className="result__verdict">
         <span className={`badge badge--${verdict.tone}`}>{verdict.label}</span>

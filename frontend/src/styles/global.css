@@ -2,6 +2,18 @@
 
 *, *::before, *::after { box-sizing: border-box; }
 
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+#root {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
 body {
   margin: 0;
   background: var(--paper);

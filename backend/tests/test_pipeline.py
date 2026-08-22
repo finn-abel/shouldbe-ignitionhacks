@@ -29,9 +29,8 @@ def test_recurring_standup_is_costed_scored_and_given_a_replacement(monkeypatch)
 
     result = analyze(invite)
 
-    # cost: (8 x 75 + 150)/hr for half an hour
-    assert result.cost == Decimal("375.00")
-    assert result.annualized_cost == Decimal("19500.00")  # x 52
+    assert result.cost == Decimal("229.24")
+    assert result.annualized_cost == Decimal("11920.48")  # x 52
     assert result.verdict is Verdict.EMAIL
     assert result.alternative_email  # the meeting has something to be replaced by
     assert result.reasoning
@@ -52,7 +51,7 @@ def test_a_kept_meeting_carries_no_drafted_email(monkeypatch):
 
     assert result.verdict is Verdict.KEEP
     assert result.alternative_email is None
-    assert result.cost == Decimal("470.00")
+    assert result.cost == Decimal("212.81")
 
 
 def test_a_one_off_meeting_has_no_annualized_cost(monkeypatch):
@@ -69,7 +68,7 @@ def test_per_user_tier_rates_flow_through(monkeypatch):
     monkeypatch.setenv("SHOULDBE_USE_STUB", "1")
     invite = ParsedInvite(title="Kickoff", duration_minutes=60, attendee_tiers=[Tier.IC])
 
-    assert analyze(invite).cost == Decimal("75.00")
+    assert analyze(invite).cost == Decimal("48.96")
     assert analyze(invite, {Tier.IC: Decimal("200")}).cost == Decimal("200.00")
 
 

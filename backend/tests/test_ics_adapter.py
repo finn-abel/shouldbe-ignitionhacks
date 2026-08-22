@@ -48,7 +48,7 @@ def test_shouldbes_own_address_is_not_billed_as_an_attendee():
     invite = parse_ics(invite_text(), (SHOULDBE,))
 
     assert invite.attendee_count == 2
-    assert analyze(invite).cost == Decimal("75.00")  # 2 ICs x 30 minutes
+    assert analyze(invite).cost == Decimal("48.96")  # 2 IT-02 references x 30 minutes
 
 
 def test_without_the_exclusion_the_tool_would_be_billed():
@@ -114,7 +114,7 @@ def test_no_rrule_means_a_one_off_with_no_annual_cost():
 def test_a_weekly_invite_annualizes_at_fifty_two_occurrences():
     invite = parse_ics(invite_text(rrule="FREQ=WEEKLY"), (SHOULDBE,))
 
-    assert analyze(invite).annualized_cost == Decimal("3900.00")  # 75.00 x 52
+    assert analyze(invite).annualized_cost == Decimal("2545.92")  # 48.96 x 52
 
 
 def test_an_unreadable_rrule_is_treated_as_non_recurring():
@@ -173,8 +173,8 @@ def test_the_reply_carries_the_score_the_cost_and_the_draft():
     subject, body = compose_reply(analysis)
 
     assert str(analysis.score) in subject
-    assert "$75.00" in body
-    assert "$3,900.00 a year" in body
+    assert "$48.96" in body
+    assert "$2,545.92 a year" in body
     assert analysis.alternative_email in body
 
 
@@ -186,7 +186,7 @@ def test_the_reply_never_names_an_attendee_or_a_rate():
 
     for address in ("a@x.com", "b@x.com"):
         assert address not in body
-    for rate in ("75.00/hr", "$75/hr", "per person", "each"):
+    for rate in ("48.96/hr", "$48.96/hr", "per person", "each"):
         assert rate not in body
     assert "No individual's rate or salary" in body
 

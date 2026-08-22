@@ -173,7 +173,7 @@ def test_a_redelivered_invite_does_not_change_the_money(session, guest):
     session.rollback()
 
     after = total_spend([MeetingRead.model_validate(m) for m in list_meetings(session, guest.id)])
-    assert before == after == Decimal("75.00")
+    assert before == after == Decimal("48.96")
 
 
 # ------------------------------------------------------- the shared guest's ledger

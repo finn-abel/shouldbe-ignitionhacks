@@ -1,13 +1,44 @@
 import { useEffect, useState } from 'react';
 import { getBudget, getTierRates, updateBudget, updateTierRates } from '../api/client.js';
-import { formatMoney } from '../lib/format.js';
+import { formatMoney, formatMoneyExact } from '../lib/format.js';
 
 const TIERS = [
-  { key: 'ic', label: 'IC', note: 'engineers, designers, analysts' },
-  { key: 'senior', label: 'Senior', note: 'staff and senior specialists' },
-  { key: 'manager', label: 'Manager', note: 'people and program leads' },
-  { key: 'exec', label: 'Exec', note: 'directors and above' },
+  {
+    key: 'ic',
+    label: 'IT-02',
+    note: 'intermediate delivery, analysis, development',
+    salary: '$85,854-$105,080',
+    rate: '48.96',
+  },
+  {
+    key: 'senior',
+    label: 'IT-03',
+    note: 'senior specialist, technical lead',
+    salary: '$101,343-$125,914',
+    rate: '58.27',
+  },
+  {
+    key: 'manager',
+    label: 'IT-04',
+    note: 'manager, architect, specialized expert',
+    salary: '$116,037-$144,434',
+    rate: '66.79',
+  },
+  {
+    key: 'exec',
+    label: 'EX-03 / DG',
+    note: 'Director General reference level',
+    salary: '$172,548-$202,918',
+    rate: '96.27',
+  },
 ];
+
+const FEDERAL_REFERENCE_RATES = Object.fromEntries(TIERS.map(({ key, rate }) => [key, rate]));
+const LEGACY_PLACEHOLDER_RATES = { ic: '75', senior: '110', manager: '150', exec: '250' };
+const FEDERAL_HOURS = '1,950 hrs/year';
+
+const isLegacyPlaceholderRates = (loadedRates) =>
+  TIERS.every(({ key }) => Number(loadedRates[key]) === Number(LEGACY_PLACEHOLDER_RATES[key]));
 
 /**
  * The cost basis and the budget (doc 2 §4.2, §4.3).
@@ -24,7 +55,12 @@ export default function Settings({ theme, onThemeChange, onSaved }) {
     (async () => {
       try {
         const [loadedRates, loadedBudget] = await Promise.all([getTierRates(), getBudget()]);
-        setRates(loadedRates);
+        if (isLegacyPlaceholderRates(loadedRates)) {
+          setRates(FEDERAL_REFERENCE_RATES);
+          setStatus('Federal reference rates loaded. Save settings to apply.');
+        } else {
+          setRates(loadedRates);
+        }
         setBudget(loadedBudget.monthly_amount ?? '');
       } catch (failure) {
         setError(failure.message);
@@ -38,6 +74,12 @@ export default function Settings({ theme, onThemeChange, onSaved }) {
     if (text === '') return null;
     const amount = Number(text);
     return Number.isFinite(amount) && amount >= 0 ? amount : null;
+  };
+
+  const useFederalReferenceRates = () => {
+    setRates((prev) => ({ ...prev, ...FEDERAL_REFERENCE_RATES }));
+    setError(null);
+    setStatus('Federal reference rates loaded. Save settings to apply.');
   };
 
   const save = async (event) => {
@@ -80,77 +122,125 @@ export default function Settings({ theme, onThemeChange, onSaved }) {
   if (!rates) return <p className="dashboard__loading">Loading settings…</p>;
 
   const blendedHour = TIERS.reduce((sum, { key }) => sum + (Number(rates[key]) || 0), 0);
+  const monthlyAmount = amountOf(budget);
+  const budgetLabel = String(budget ?? '').trim() === '' ? 'Unset' : formatMoney(monthlyAmount);
 
   return (
-    <form className="settings" onSubmit={save}>
-      <section className="panel settings__theme">
-        <div className="panel__head">
-          <h2>Appearance</h2>
+    <form className="settings" onSubmit={save} noValidate>
+      <header className="settings-command">
+        <div>
+          <p className="eyebrow">Settings</p>
+          <h1>Govern the cost model without exposing salary data.</h1>
+          <p>
+            Tune the operating budget, theme, and blended federal reference rates used
+            to price meetings from now on.
+          </p>
         </div>
-        <div className="theme-switch" role="group" aria-label="Theme">
-          <button
-            type="button"
-            className="theme-switch__option"
-            aria-pressed={theme === 'light'}
-            onClick={() => onThemeChange('light')}
-          >
-            Light
-          </button>
-          <button
-            type="button"
-            className="theme-switch__option"
-            aria-pressed={theme === 'dark'}
-            onClick={() => onThemeChange('dark')}
-          >
-            Dark
-          </button>
-        </div>
-      </section>
-
-      <section className="panel">
-        <div className="panel__head">
-          <h2>Monthly meeting budget</h2>
-        </div>
-        <label className="field">
-          <span className="field__label">
-            What this team should spend on meetings each month
-            <span className="field__hint">leave blank for no budget</span>
-          </span>
-          <div className="money-input">
-            <span aria-hidden="true">$</span>
-            <input
-              className="field__input figure"
-              type="number"
-              min="0"
-              step="100"
-              value={budget}
-              onChange={(event) => setBudget(event.target.value)}
-              aria-label="Monthly meeting budget in dollars"
-            />
+        <dl className="settings-summary" aria-label="Current settings summary">
+          <div>
+            <dt>Theme</dt>
+            <dd>{theme === 'dark' ? 'Dark' : 'Light'}</dd>
           </div>
-        </label>
-      </section>
+          <div>
+            <dt>Budget</dt>
+            <dd className="figure">{budgetLabel}</dd>
+          </div>
+          <div>
+            <dt>Rate basis</dt>
+            <dd>IT + DG</dd>
+          </div>
+        </dl>
+      </header>
 
-      <section className="panel">
+      <div className="settings-grid">
+        <section className="panel panel--surface settings__theme">
+          <div className="panel__head">
+            <h2>Appearance</h2>
+          </div>
+          <div className="theme-switch" role="group" aria-label="Theme">
+            <button
+              type="button"
+              className="theme-switch__option"
+              aria-pressed={theme === 'light'}
+              onClick={() => onThemeChange('light')}
+            >
+              Light
+            </button>
+            <button
+              type="button"
+              className="theme-switch__option"
+              aria-pressed={theme === 'dark'}
+              onClick={() => onThemeChange('dark')}
+            >
+              Dark
+            </button>
+          </div>
+        </section>
+
+        <section className="panel panel--surface settings__budget">
+          <div className="panel__head">
+            <h2>Monthly meeting budget</h2>
+          </div>
+          <label className="field">
+            <span className="field__label">
+              What this team should spend on meetings each month
+              <span className="field__hint">leave blank for no budget</span>
+            </span>
+            <div className="money-input">
+              <span aria-hidden="true">$</span>
+              <input
+                className="field__input figure"
+                type="number"
+                min="0"
+                step="0.01"
+                inputMode="decimal"
+                value={budget}
+                onChange={(event) => setBudget(event.target.value)}
+                aria-label="Monthly meeting budget in dollars"
+              />
+            </div>
+          </label>
+        </section>
+      </div>
+
+      <section className="panel panel--surface settings__rates">
         <div className="panel__head">
-          <h2>Role-tier rates</h2>
+          <div className="panel__title">
+            <h2>Federal pay-scale rates</h2>
+            <p className="panel__hint">Midpoint of public salary bands converted to hourly rates.</p>
+          </div>
           <p className="panel__count figure">
             {formatMoney(blendedHour)}/hr with one of each
           </p>
         </div>
 
+        <div className="settings__basis">
+          <div>
+            <span>Reference basis</span>
+            <strong>IT-02, IT-03, IT-04, and EX-03 / Director General</strong>
+            <p>
+              Gross annual pay divided by {FEDERAL_HOURS}. Benefits, at-risk pay,
+              overtime, and overhead are not included.
+            </p>
+          </div>
+          <button type="button" className="reference-action" onClick={useFederalReferenceRates}>
+            Use federal reference rates
+          </button>
+        </div>
+
         <p className="settings__privacy">
           <strong>Blended role rates only — never individual salaries.</strong> A meeting is
-          costed from the loaded hourly rate of each tier in the room. No screen and no email
+          costed from the configured hourly rate of each tier in the room. No screen and no email
           in ShouldBe ever shows one person&apos;s number.
         </p>
 
         <div className="rates">
-          {TIERS.map(({ key, label, note }) => (
+          {TIERS.map(({ key, label, note, salary, rate }) => (
             <label className="rate" key={key}>
               <span className="rate__label">
-                {label}
+                <span className="rate__name">{label}</span>
                 <span className="rate__note">{note}</span>
+                <span className="rate__salary">{salary} annual range</span>
               </span>
               <div className="money-input money-input--compact">
                 <span aria-hidden="true">$</span>
@@ -158,28 +248,44 @@ export default function Settings({ theme, onThemeChange, onSaved }) {
                   className="field__input figure"
                   type="number"
                   min="0"
-                  step="5"
+                  step="0.01"
+                  inputMode="decimal"
                   value={rates[key]}
                   onChange={(event) =>
                     setRates((prev) => ({ ...prev, [key]: event.target.value }))
                   }
-                  aria-label={`${label} loaded hourly rate in dollars`}
+                  aria-label={`${label} hourly reference rate in dollars`}
                 />
                 <span className="rate__unit">/hr</span>
               </div>
+              <span className="rate__default figure">
+                Ref {formatMoneyExact(rate)}/hr
+              </span>
             </label>
           ))}
         </div>
 
-        <p className="settings__caveat">
-          New rates price meetings analyzed from now on. Meetings already in the ledger keep
-          what they cost — the ledger records what happened, it does not re-price it.
-        </p>
+        <div className="settings__caveat">
+          <p>
+            New rates price meetings analyzed from now on. Meetings already in the ledger keep
+            what they cost — the ledger records what happened, it does not re-price it.
+          </p>
+          <p>
+            Source references:{' '}
+            <a href="https://fedpay.ca/blog/it-group-salary-federal-government" target="_blank" rel="noreferrer">
+              FedPay IT group
+            </a>
+            {' '}and{' '}
+            <a href="https://fedpay.ca/salary/ex" target="_blank" rel="noreferrer">
+              FedPay EX
+            </a>.
+          </p>
+        </div>
       </section>
 
       {error && <p className="notice notice--error" role="alert">{error}</p>}
 
-      <div className="settings__actions">
+      <div className="settings__actions panel--surface">
         <button className="submit" type="submit">Save settings</button>
         {status && <span className="settings__status" role="status">{status}</span>}
       </div>

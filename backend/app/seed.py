@@ -23,17 +23,17 @@ from app.schemas.invite import ParsedInvite
 from app.services.pipeline import analyze
 
 # The seeded spend meaningfully exceeds this, so the dashboard opens "over budget" (§7).
-# Sized against the curated set below to land on doc 1's demo headline: this month's
-# spend is $8,372.50, which is 34% over.
-GUEST_BUDGET = Decimal("6250.00")
+# Sized against the curated federal-rate set below so this month's spend is still roughly
+# 34% over budget.
+GUEST_BUDGET = Decimal("4021.86")
 
 ORGANIZER = "ops@northwind.example"
 
 # (invite, days ago, final status). Titles are chosen so the scoring rubric reaches the
 # intended verdict on its own — nothing here overrides the engine.
 CURATED = [
-    # The demo drill-down. Sized to doc 1's arc exactly: 18 people for half an hour at
-    # the default tier rates is $800 a session, $41,600 a year.
+    # The demo drill-down: 18 people for half an hour against federal reference rates,
+    # recurring weekly.
     (ParsedInvite(
         title="All-hands engineering standup",
         description="Every team reads out what they did yesterday and what they will do today.",

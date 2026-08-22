@@ -69,16 +69,32 @@ on pushes to `main` and on pull requests into it. See `.github/workflows/ci.yml`
 
 ## Real LLM scoring
 
-Everything runs offline on a deterministic stub by default. To use the real provider, put a key
-in `LLM_API_KEY`, validate it in isolation first, then flip the stub off:
+Everything runs offline on a deterministic stub by default. OpenAI is the default real
+provider. Put an OpenAI Platform API key in `backend/.env`, validate it in isolation,
+then flip the stub off:
+
+```env
+LLM_PROVIDER=openai
+OPENAI_MODEL=gpt-5-nano
+OPENAI_API_KEY=sk-...
+LLM_MAX_TOKENS=1200
+SHOULDBE_USE_STUB=0
+```
 
 ```bash
 cd backend
-LLM_API_KEY=sk-... ./venv/bin/python spike_llm.py   # one call, prints the analysis
-SHOULDBE_USE_STUB=0 ./venv/bin/uvicorn app.main:app --reload --port 8000
+./venv/bin/python spike_llm.py   # one call, prints the analysis
+./venv/bin/uvicorn app.main:app --reload --port 8000
 ```
 
 If the provider errors mid-demo, set `SHOULDBE_USE_STUB=1` and restart — the stub is never removed.
+
+## Scoring rubric
+
+The final necessity score is calculated by the backend from a fixed 100% weighted
+rubric: decision pressure 35%, collaboration depth 25%, interaction value 20%,
+meeting fit 10%, and business impact 10%. The LLM only supplies the category scores
+and reasoning; it does not get to choose the final score or verdict.
 
 ## Door A — invite ShouldBe to a meeting
 

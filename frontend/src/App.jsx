@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import AnalysisResult from './components/AnalysisResult.jsx';
 import AnalyzeForm from './components/AnalyzeForm.jsx';
+import Colophon from './components/Colophon.jsx';
 import Dashboard from './components/Dashboard.jsx';
 import Entry from './components/Entry.jsx';
 import Settings from './components/Settings.jsx';
@@ -169,10 +170,37 @@ export default function App() {
                   aria-hidden={view !== 'analyze'}
                   inert={view !== 'analyze' ? true : undefined}
                 >
-                  <div className="workbench">
-                    <AnalyzeForm onAnalyzed={analyze} pending={pending} error={error} />
-                    <AnalysisResult analysis={analysis} />
-                  </div>
+                  <section className="analysis-page" aria-labelledby="analysis-title">
+                    <header className="analysis-command">
+                      <div>
+                        <p className="eyebrow">Analyze a meeting</p>
+                        <h1 id="analysis-title">Price the room before it reaches the calendar.</h1>
+                        <p>
+                          Enter the meeting shape once. ShouldBe prices the occurrence from your
+                          blended federal rate basis, scores the necessity, and records the decision.
+                        </p>
+                      </div>
+                      <dl className="analysis-rail" aria-label="Analysis workflow">
+                        <div>
+                          <dt>1</dt>
+                          <dd>Cost</dd>
+                        </div>
+                        <div>
+                          <dt>2</dt>
+                          <dd>Score</dd>
+                        </div>
+                        <div>
+                          <dt>3</dt>
+                          <dd>Record</dd>
+                        </div>
+                      </dl>
+                    </header>
+
+                    <div className="workbench">
+                      <AnalyzeForm onAnalyzed={analyze} pending={pending} error={error} />
+                      <AnalysisResult analysis={analysis} />
+                    </div>
+                  </section>
                 </section>
               </div>
             </div>
@@ -188,28 +216,7 @@ export default function App() {
         )}
       </main>
 
-      <footer className="colophon">
-        <div className="colophon__inner">
-          <div className="colophon__brand">
-            <strong>ShouldBe</strong>
-            <span>Costed from blended role-tier rates. Never individual salaries.</span>
-          </div>
-          <dl className="colophon__facts">
-            <div>
-              <dt>Security</dt>
-              <dd>Calendar permissions, data retention, and access notes go here.</dd>
-            </div>
-            <div>
-              <dt>Methodology</dt>
-              <dd>Scoring model, rate assumptions, and review cadence go here.</dd>
-            </div>
-            <div>
-              <dt>Contact</dt>
-              <dd>Support owner, team alias, or rollout channel goes here.</dd>
-            </div>
-          </dl>
-        </div>
-      </footer>
+      <Colophon />
     </>
   );
 }

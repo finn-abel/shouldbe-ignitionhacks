@@ -1,10 +1,10 @@
 import { useState } from 'react';
 
 const TIERS = [
-  { key: 'ic', label: 'IC' },
-  { key: 'senior', label: 'Senior' },
-  { key: 'manager', label: 'Manager' },
-  { key: 'exec', label: 'Exec' },
+  { key: 'ic', label: 'IT-02', note: 'delivery / analysis' },
+  { key: 'senior', label: 'IT-03', note: 'senior specialist' },
+  { key: 'manager', label: 'IT-04', note: 'manager / architect' },
+  { key: 'exec', label: 'EX-03 / DG', note: 'director general' },
 ];
 
 const DURATIONS = [15, 30, 45, 60, 90];
@@ -31,6 +31,7 @@ export default function AnalyzeForm({ onAnalyzed, pending, error }) {
   const [attendees, setAttendees] = useState(EMPTY_ATTENDEES);
 
   const headcount = Object.values(attendees).reduce((sum, n) => sum + n, 0);
+  const cadence = fields.is_recurring ? fields.recurrence_freq.toLowerCase() : 'one-off';
 
   const set = (key) => (event) => {
     const target = event.target;
@@ -59,6 +60,21 @@ export default function AnalyzeForm({ onAnalyzed, pending, error }) {
         <p className="eyebrow">Meeting details</p>
         <h2>What are you about to spend?</h2>
       </div>
+
+      <dl className="sheet__summary" aria-label="Current meeting assumptions">
+        <div>
+          <dt>People</dt>
+          <dd className="figure">{headcount}</dd>
+        </div>
+        <div>
+          <dt>Duration</dt>
+          <dd className="figure">{fields.duration_minutes}m</dd>
+        </div>
+        <div>
+          <dt>Cadence</dt>
+          <dd>{cadence}</dd>
+        </div>
+      </dl>
 
       <label className="field">
         <span className="field__label">Title</span>
@@ -108,9 +124,12 @@ export default function AnalyzeForm({ onAnalyzed, pending, error }) {
           <span className="field__hint figure">{headcount} attending</span>
         </legend>
         <div className="tiers">
-          {TIERS.map(({ key, label }) => (
+          {TIERS.map(({ key, label, note }) => (
             <div className="tier" key={key}>
-              <span className="tier__label">{label}</span>
+              <span className="tier__label">
+                <span className="tier__name">{label}</span>
+                <span className="tier__note">{note}</span>
+              </span>
               <div className="stepper">
                 <button
                   type="button"

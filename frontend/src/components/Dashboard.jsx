@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import BurnRateChart from './BurnRateChart.jsx';
 import Ledger from './Ledger.jsx';
 import { convertMeeting, getStats, listMeetings } from '../api/client.js';
-import { formatMoney, formatMoneyExact } from '../lib/format.js';
+import { formatMoney, formatMoneyExact, hasAmount } from '../lib/format.js';
 
 const BUCKETS = ['day', 'week'];
 
@@ -84,27 +84,59 @@ export default function Dashboard({ refreshKey }) {
   const { stats, meetings } = data;
   const { budget } = stats;
   const over = budget.is_over_budget;
+  const actionableMeetings = meetings
+    .filter((meeting) => meeting.verdict === 'email' && meeting.status !== 'converted');
+  const convertedMeetings = meetings.filter((meeting) => meeting.status === 'converted');
+  const defendedMeetings = meetings.filter((meeting) => meeting.verdict === 'keep');
+  const annualExposure = actionableMeetings.reduce(
+    (sum, meeting) => sum + Number(meeting.annualized_cost ?? 0),
+    0,
+  );
+  const priorityMeetings = [...actionableMeetings]
+    .sort((a, b) => Number(b.annualized_cost ?? b.cost ?? 0) - Number(a.annualized_cost ?? a.cost ?? 0))
+    .slice(0, 3);
+  const largestExposure = priorityMeetings.find((meeting) => hasAmount(meeting.annualized_cost));
 
   return (
     <div className="dashboard">
-      <section className={`headline ${over ? 'headline--over' : ''}`}>
-        <p className="eyebrow">Meeting spend this month</p>
-        <p className="headline__figure figure">{formatMoney(budget.month_spend)}</p>
+      <section className={`dashboard-hero ${over ? 'dashboard-hero--over' : ''}`}>
+        <div className={`headline ${over ? 'headline--over' : ''}`}>
+          <p className="eyebrow">Meeting spend this month</p>
+          <p className="headline__figure figure">{formatMoney(budget.month_spend)}</p>
 
-        {budget.monthly_amount === null ? (
-          <p className="headline__verdict">No budget set yet.</p>
-        ) : (
-          <p className="headline__verdict">
-            <strong className="figure">
-              {Math.abs(Math.round(budget.percent_over ?? 0))}%
-            </strong>{' '}
-            {over ? 'over' : 'under'} a {formatMoney(budget.monthly_amount)} budget
-            <span className="headline__delta figure">
-              {over ? '+' : ''}
-              {formatMoneyExact(budget.difference)}
-            </span>
-          </p>
-        )}
+          {budget.monthly_amount === null ? (
+            <p className="headline__verdict">No budget set yet.</p>
+          ) : (
+            <p className="headline__verdict">
+              <strong className="figure">
+                {Math.abs(Math.round(budget.percent_over ?? 0))}%
+              </strong>{' '}
+              {over ? 'over' : 'under'} a {formatMoney(budget.monthly_amount)} budget
+              <span className="headline__delta figure">
+                {over ? '+' : ''}
+                {formatMoneyExact(budget.difference)}
+              </span>
+            </p>
+          )}
+        </div>
+
+        <dl className="dashboard-signals" aria-label="Operating snapshot">
+          <div className="dashboard-signal dashboard-signal--leak">
+            <dt>Open review</dt>
+            <dd className="figure">{actionableMeetings.length}</dd>
+            <p>async candidates still on the ledger</p>
+          </div>
+          <div className="dashboard-signal dashboard-signal--reclaim">
+            <dt>Recovered</dt>
+            <dd className="figure">{formatMoney(stats.reclaimed_savings)}</dd>
+            <p>{convertedMeetings.length} converted to email</p>
+          </div>
+          <div className="dashboard-signal dashboard-signal--defend">
+            <dt>Protected</dt>
+            <dd className="figure">{defendedMeetings.length}</dd>
+            <p>meetings judged worth the room</p>
+          </div>
+        </dl>
       </section>
 
       <section className="money">
@@ -143,30 +175,70 @@ export default function Dashboard({ refreshKey }) {
         </section>
       </section>
 
-      <section className="panel">
-        <div className="panel__head">
-          <h2>Burn rate</h2>
-          <div className="chips">
-            {BUCKETS.map((option) => (
-              <button
-                key={option}
-                type="button"
-                className="chip"
-                aria-pressed={bucket === option}
-                onClick={() => setBucket(option)}
-              >
-                by {option}
-              </button>
-            ))}
+      <div className="dashboard-board">
+        <section className="panel panel--surface panel--chart">
+          <div className="panel__head">
+            <h2>Burn rate</h2>
+            <div className="chips">
+              {BUCKETS.map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  className="chip"
+                  aria-pressed={bucket === option}
+                  onClick={() => setBucket(option)}
+                >
+                  by {option}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
-        <BurnRateChart buckets={stats.spend_over_time} bucket={bucket} />
-      </section>
+          <BurnRateChart buckets={stats.spend_over_time} bucket={bucket} />
+        </section>
 
-      <section className="panel">
+        <section className="panel panel--surface panel--queue">
+          <div className="panel__head">
+            <h2>Attention queue</h2>
+            <p className="panel__count figure">{formatMoney(annualExposure)}/yr open</p>
+          </div>
+
+          {priorityMeetings.length ? (
+            <>
+              <ol className="review-list">
+                {priorityMeetings.map((meeting) => (
+                  <li className="review-item" key={meeting.id}>
+                    <span className="review-item__title">{meeting.title}</span>
+                    <span className="review-item__meta">
+                      <span className="figure">{formatMoneyExact(meeting.cost)}</span>
+                      {hasAmount(meeting.annualized_cost) && (
+                        <span className="figure">{formatMoney(meeting.annualized_cost)}/yr</span>
+                      )}
+                    </span>
+                  </li>
+                ))}
+              </ol>
+
+              {largestExposure && (
+                <p className="queue-note">
+                  Largest recurring exposure: <strong>{largestExposure.title}</strong>
+                </p>
+              )}
+            </>
+          ) : (
+            <p className="queue-empty">
+              No open async candidates. New analyses that should become email will land here.
+            </p>
+          )}
+        </section>
+      </div>
+
+      <section className="panel panel--surface panel--ledger">
         <div className="panel__head">
           <h2>The ledger</h2>
-          <p className="panel__count figure">{meetings.length} meetings</p>
+          <div className="panel__meta">
+            <p className="panel__count figure">{meetings.length} meetings</p>
+            <p className="panel__hint">Open a row for reasoning, recurrence, and replacement email.</p>
+          </div>
         </div>
         <Ledger meetings={meetings} onConvert={convert} converting={converting} />
       </section>
