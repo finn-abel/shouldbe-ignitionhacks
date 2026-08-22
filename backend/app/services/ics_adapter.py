@@ -9,14 +9,27 @@ Run it against a saved file for the dev/fallback path (doc 2 §5.3):
     cd backend && PYTHONPATH=. python -m app.services.ics_adapter invite.ics
 """
 
+import logging
 import re
 from datetime import timedelta
 
 from ics import Calendar
 
 from app.enums import Tier
+from app.schemas.invite import MAX_ATTENDEES, MAX_DESCRIPTION_CHARS
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_DURATION_MINUTES = 60
+
+# Door A parses whatever arrives at a public webhook, so every field it reads is hostile
+# until clamped. `ParsedInvite` enforces the same limits, but it enforces them by raising —
+# and a 500 on the webhook is a 500 Postmark retries five more times. Clamping here means a
+# malformed or deliberately huge invite is still recorded, just bounded.
+MAX_TITLE_CHARS = 512
+# The calendar text itself. A base64 attachment is decoded before anything looks at it, so
+# without a ceiling the decode is the denial of service.
+MAX_ICS_CHARS = 1_000_000
 
 # An .ics carries no role information, so every attendee is priced at the lowest tier.
 # Understating a cost is the safe direction for a spend claim — better to be told a
@@ -144,13 +157,20 @@ def parse_ics(ics_text: str, exclude_emails: tuple[str, ...] = ()) -> "ParsedInv
         for email in (_email_of(a) for a in event.attendees)
         if email and _billing_key(email) not in ignored
     ]
+    if len(attendees) > MAX_ATTENDEES:
+        # Priced on the first MAX_ATTENDEES rather than refused: an invite this large is
+        # either a mailing list or an attack, and both should land as a bounded row.
+        logger.warning(
+            "Invite lists %s attendees; pricing the first %s.", len(attendees), MAX_ATTENDEES
+        )
+        attendees = attendees[:MAX_ATTENDEES]
 
     organizer = _email_of(event.organizer) if event.organizer else ""
     recurrence = recurrence_from_rrule(_rrule_of(event))
 
     return ParsedInvite(
-        title=(event.name or "Untitled meeting").strip(),
-        description=(event.description or "").strip(),
+        title=(event.name or "Untitled meeting").strip()[:MAX_TITLE_CHARS] or "Untitled meeting",
+        description=(event.description or "").strip()[:MAX_DESCRIPTION_CHARS],
         start=event.begin.datetime if event.begin else None,
         duration_minutes=_duration_minutes(event),
         attendee_tiers=[DEFAULT_ATTENDEE_TIER] * len(attendees),
@@ -188,14 +208,19 @@ def find_ics_text(payload: dict) -> str:
         name = (attachment.get("Name") or "").lower()
         if "text/calendar" not in content_type and not name.endswith(".ics"):
             continue
+        encoded = attachment.get("Content") or ""
+        # Checked before decoding, not after: the decode is what allocates.
+        if len(encoded) > MAX_ICS_CHARS * 2:
+            logger.warning("Ignoring a %s-byte calendar attachment; over the size cap.", len(encoded))
+            continue
         try:
-            return base64.b64decode(attachment.get("Content") or "").decode("utf-8", "replace")
+            return base64.b64decode(encoded).decode("utf-8", "replace")[:MAX_ICS_CHARS]
         except (ValueError, TypeError):
             continue
 
     for body in (payload.get("TextBody"), payload.get("HtmlBody")):
         if body and "BEGIN:VCALENDAR" in body:
-            match = re.search(r"BEGIN:VCALENDAR.*?END:VCALENDAR", body, re.S)
+            match = re.search(r"BEGIN:VCALENDAR.*?END:VCALENDAR", body[:MAX_ICS_CHARS], re.S)
             if match:
                 return match.group(0)
 

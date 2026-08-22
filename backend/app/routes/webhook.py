@@ -4,6 +4,8 @@ The only asymmetry with Doors B and C is the adapter. Once the .ics is a `Parsed
 this hands it to the same `analyze()` every other door uses.
 """
 
+import base64
+import hmac
 import logging
 import os
 
@@ -11,11 +13,17 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request,
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.config import is_deployed
 from app.data.db import get_session
 from app.data.meetings import find_by_source_key, save_analysis
 from app.data.tiers import get_tier_rates
 from app.services.email import compose_reply, drain_outbox_in_new_session
-from app.services.inbound_routing import normalize_address, resolve_owner, strip_subaddress
+from app.services.inbound_routing import (
+    normalize_address,
+    reply_recipient,
+    resolve_attribution,
+    strip_subaddress,
+)
 from app.services.ics_adapter import (
     NoInviteFound,
     find_ics_text,
@@ -23,36 +31,56 @@ from app.services.ics_adapter import (
     source_key_for,
 )
 from app.services.pipeline import analyze
+from app.services.rate_limit import FixedWindowLimiter, rate_limited
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/webhook", tags=["webhook"])
 
+# Every accepted call here can send an email. Sized well above Postmark's redelivery
+# behaviour (six attempts over ~51 minutes) so legitimate retries are never the thing
+# that trips it.
+INBOUND_LIMIT = FixedWindowLimiter(limit=60, window_seconds=60)
+
+
+def _supplied_token(request: Request) -> str:
+    """The caller's token. Postmark can send it as `?token=` or as HTTP Basic auth."""
+    from_query = request.query_params.get("token")
+    if from_query is not None:
+        return from_query
+
+    header = request.headers.get("authorization", "")
+    if header.lower().startswith("basic "):
+        try:
+            return base64.b64decode(header[6:]).decode().split(":", 1)[-1]
+        except (ValueError, UnicodeDecodeError):
+            return ""
+    return ""
+
 
 def _verify_caller(request: Request) -> None:
-    """Shared secret, when one is configured.
+    """Shared secret. Required in the cloud, optional on a laptop.
 
-    This endpoint is public and it sends email, so an open one is a spam relay. Postmark
-    can put the secret in the webhook URL as `?token=`, or send it as HTTP Basic auth.
-    Unset means unverified — fine locally, and loudly logged so it is not forgotten.
+    This endpoint is public and it sends email, so an open one is a spam relay — and it
+    writes to whichever ledger the invite resolves to, so an open one is also an arbitrary
+    write. Unset used to mean "accept everyone" everywhere, which is a convenience worth
+    keeping locally and a hole in the cloud, so deployed it is now a refusal rather than a
+    warning nobody reads.
     """
-    expected = os.getenv("POSTMARK_WEBHOOK_SECRET")
+    expected = (os.getenv("POSTMARK_WEBHOOK_SECRET") or "").strip()
     if not expected:
+        if is_deployed():
+            logger.error("POSTMARK_WEBHOOK_SECRET is unset; refusing inbound email.")
+            raise HTTPException(
+                status.HTTP_503_SERVICE_UNAVAILABLE,
+                "The inbound webhook is not configured.",
+            )
         logger.warning("POSTMARK_WEBHOOK_SECRET is unset; the inbound webhook is unverified.")
         return
 
-    supplied = request.query_params.get("token")
-    if supplied is None:
-        header = request.headers.get("authorization", "")
-        if header.lower().startswith("basic "):
-            import base64
-
-            try:
-                supplied = base64.b64decode(header[6:]).decode().split(":", 1)[-1]
-            except (ValueError, UnicodeDecodeError):
-                supplied = None
-
-    if supplied != expected:
+    # compare_digest, not `!=`: a plain string comparison returns as soon as two bytes
+    # differ, which leaks the secret one character at a time to anyone timing the replies.
+    if not hmac.compare_digest(_supplied_token(request), expected):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Bad webhook token.")
 
 
@@ -75,7 +103,7 @@ def _shouldbe_addresses(payload: dict) -> tuple[str, ...]:
     return tuple(sorted(address for address in seen if address))
 
 
-@router.post("/inbound-email")
+@router.post("/inbound-email", dependencies=[Depends(rate_limited(INBOUND_LIMIT))])
 def inbound_email(
     payload: dict,
     request: Request,
@@ -104,7 +132,8 @@ def inbound_email(
 
     # Whose ledger this lands on: routing token, then organizer address, then claimed
     # domain, then the shared guest. Closes doc 2 §5.2's known edge.
-    owner = resolve_owner(session, payload, invite)
+    attribution = resolve_attribution(session, payload, invite)
+    owner = attribution.user
     source_key = source_key_for(payload, ics_text)
 
     if source_key:
@@ -118,7 +147,11 @@ def inbound_email(
     # Rendered now, not at send time: `compose_reply` needs the `MeetingAnalysis`, which
     # only exists here, so the outbox stores finished text and the drain needs just the row.
     subject, body = compose_reply(analysis)
-    organizer = normalize_address(invite.organizer_email)
+
+    # NOT the invite's ORGANIZER field. That is attacker-supplied, and using it made this
+    # an open relay: anyone able to email the public inbox could pick the recipient. See
+    # `reply_recipient` — "" means the invite is recorded but nothing is sent.
+    recipient = reply_recipient(attribution, invite)
 
     try:
         meeting = save_analysis(
@@ -126,7 +159,7 @@ def inbound_email(
             owner.id,
             analysis,
             source_key,
-            reply=(organizer, subject, body) if organizer else None,
+            reply=(recipient, subject, body) if recipient else None,
         )
     except IntegrityError:
         # A retry that arrived while the first delivery was still being scored. The
@@ -149,5 +182,6 @@ def inbound_email(
         "status": "analyzed",
         "meeting_id": meeting.id,
         "user_id": owner.id,
-        "reply": "queued" if organizer else "no-organizer",
+        "attributed_by": attribution.how,
+        "reply": "queued" if recipient else "not-sent-unattributed",
     }

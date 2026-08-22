@@ -8,6 +8,7 @@ from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, Field, RootModel, field_validator, model_validator
 
+from app.schemas.invite import MAX_BUDGET_SCOPES
 from app.enums import BudgetScope, OutboxStatus, Status, Tier, Verdict
 
 
@@ -138,7 +139,9 @@ class BudgetUpdate(BaseModel):
     monthly_amount: Decimal | None = Field(default=None, ge=0, le=Decimal("100000000"))
     active_scope_type: BudgetScope = BudgetScope.USER
     active_scope_name: str = Field(default="Personal", min_length=1, max_length=255)
-    budgets: list[ScopedBudgetUpdate] | None = None
+    # Bounded for the same reason attendee head counts are: `set_budget_config` writes one
+    # row per entry, so an unbounded list is an unbounded write from a single request.
+    budgets: list[ScopedBudgetUpdate] | None = Field(default=None, max_length=MAX_BUDGET_SCOPES)
 
 
 class BudgetGuardrailRead(BaseModel):

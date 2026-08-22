@@ -18,6 +18,7 @@ has seen. It is attribution for a demo ledger, not authorization.
 """
 
 import logging
+from typing import NamedTuple
 
 from sqlalchemy.orm import Session
 
@@ -62,6 +63,10 @@ PUBLIC_EMAIL_DOMAINS = frozenset(
 
 class DomainNotClaimable(Exception):
     """The domain is a public mailbox provider, malformed, or already spoken for."""
+
+
+class DomainNotOwned(Exception):
+    """The claimant has not shown they belong to the domain they are claiming."""
 
 
 def normalize_address(address: str | None) -> str:
@@ -123,26 +128,122 @@ def claimable_domain(raw: str) -> str:
     return candidate
 
 
-def resolve_owner(session: Session, payload: dict, invite: ParsedInvite) -> User:
-    """The user an inbound invite belongs to. Always returns someone."""
+def assert_claimant_owns(user: User, domain: str) -> None:
+    """Refuse a domain claim from someone who has not shown they belong to it.
+
+    Claiming a domain routes every invite organized from it onto the claimant's ledger, so
+    an unverified claim is a cross-tenant read: `acme.com` would hand the claimant Acme's
+    meeting titles, organizer addresses and head counts. `claimable_domain` only rules out
+    public mailbox providers, which stops the worst case and nothing else — it was still
+    first-come-first-served on every company domain in existence.
+
+    The bar is the claimant's own sign-in address, which Google verified before it ever
+    reached us. That is not as strong as a DNS TXT record (a proper domain-verification
+    flow is the real answer), but it is the difference between "prove you have an address
+    here" and "type any domain you like".
+    """
+    if user.is_guest:
+        # The guest row is shared by every visitor, so a claim on it is a claim by nobody.
+        # The seeded demo domain is set server-side in seed.py, which does not come here.
+        raise DomainNotOwned(
+            "The shared guest account cannot claim a domain. Sign in with Google to "
+            "claim your company domain, or use your personal invite address instead."
+        )
+
+    own_domain = domain_of(user.email)
+    if not own_domain or own_domain != domain:
+        raise DomainNotOwned(
+            f"You can only claim the domain of your own sign-in address. Sign in with an "
+            f"address at {domain} to claim it."
+        )
+
+
+# How an invite was attributed. The webhook needs this and not just the user, because
+# whether ShouldBe may *reply* depends on which signal matched — see `reply_recipient`.
+TOKEN_MATCH = "token"
+ORGANIZER_MATCH = "organizer"
+DOMAIN_MATCH = "claimed-domain"
+NO_MATCH = "guest-fallback"
+
+
+class Attribution(NamedTuple):
+    """Who the invite belongs to, and which of the four layers said so."""
+
+    user: User
+    how: str
+    # Set only for DOMAIN_MATCH: the domain that was actually claimed. Carried rather than
+    # re-derived, because the claimed domain and the claimant's email domain are not always
+    # the same row — seed.py sets one server-side without going through the claim endpoint.
+    matched_domain: str = ""
+
+    @property
+    def is_identified(self) -> bool:
+        """True when a real signal matched, as opposed to falling through to the guest."""
+        return self.how != NO_MATCH
+
+
+def resolve_attribution(session: Session, payload: dict, invite: ParsedInvite) -> Attribution:
+    """The user an inbound invite belongs to, and how that was decided."""
     token = (payload.get("MailboxHash") or "").strip().lower()
     if token:
         route = find_by_token(session, token)
         if route is not None:
             logger.info("Invite routed to user %s by token.", route.user_id)
-            return route.user
+            return Attribution(route.user, TOKEN_MATCH)
 
     organizer = normalize_address(invite.organizer_email)
     if organizer:
         user = session.query(User).filter(User.email == organizer).one_or_none()
         if user is not None:
             logger.info("Invite routed to user %s by organizer address.", user.id)
-            return user
+            return Attribution(user, ORGANIZER_MATCH)
 
         route = find_by_domain(session, domain_of(organizer))
         if route is not None:
             logger.info("Invite routed to user %s by claimed domain.", route.user_id)
-            return route.user
+            return Attribution(route.user, DOMAIN_MATCH, route.domain or "")
 
     logger.info("Invite from %r matched no user; attributing to guest.", organizer)
-    return get_or_create_guest(session)
+    return Attribution(get_or_create_guest(session), NO_MATCH)
+
+
+def resolve_owner(session: Session, payload: dict, invite: ParsedInvite) -> User:
+    """The user an inbound invite belongs to. Always returns someone."""
+    return resolve_attribution(session, payload, invite).user
+
+
+def reply_recipient(attribution: Attribution, invite: ParsedInvite) -> str:
+    """Where the reply may be sent, or "" for "do not reply at all".
+
+    The reply used to go to whatever address the .ics named as ORGANIZER. That field is
+    written by whoever sent the invite and is not checked against anything, so anyone who
+    could email ShouldBe's public inbox could make it send mail to a third party of their
+    choosing, from a domain ShouldBe has verified, with a subject line they controlled.
+    The inbox address is handed to every visitor by `GET /api/inbound-route`, so "could
+    email it" means anyone. That is an open relay wearing the sender's own reputation.
+
+    So the recipient is no longer taken from the invite. It is one of exactly two things:
+
+    - a registered user's own sign-in address, which Google verified; or
+    - an address on a domain a registered user has proven they hold (see
+      `assert_claimant_owns`), which is the only case where replying to someone who is
+      not themselves a user is something a user actually asked for.
+
+    An invite that matched nothing is still costed and recorded on the guest ledger. It
+    just does not get an email, because there is nobody it could safely be sent to.
+    """
+    if not attribution.is_identified:
+        return ""
+
+    if attribution.how in (TOKEN_MATCH, ORGANIZER_MATCH):
+        # The account this landed on. Never an address supplied by the invite.
+        return normalize_address(attribution.user.email)
+
+    # DOMAIN_MATCH: the organizer, but only inside the domain that was actually claimed.
+    organizer = normalize_address(invite.organizer_email)
+    allowed = (attribution.matched_domain or "").strip().lower()
+    if organizer and allowed and domain_of(organizer) == allowed:
+        return organizer
+
+    logger.warning("Declining to reply: organizer %r is outside the claimed domain.", organizer)
+    return ""

@@ -16,7 +16,12 @@ from app.data.models import User
 from app.data.outbox import list_for_user
 from app.routes.auth import acting_user
 from app.schemas.api import InboundRouteRead, InboundRouteUpdate, OutboxRead
-from app.services.inbound_routing import DomainNotClaimable, claimable_domain
+from app.services.inbound_routing import (
+    DomainNotClaimable,
+    DomainNotOwned,
+    assert_claimant_owns,
+    claimable_domain,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +58,13 @@ def write_route(
             domain = claimable_domain(update.domain)
         except DomainNotClaimable as refusal:
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(refusal)) from refusal
+
+        # Claiming is an authorization decision, not just a validation one: it decides
+        # whose ledger other people's invites land on.
+        try:
+            assert_claimant_owns(user, domain)
+        except DomainNotOwned as refusal:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, str(refusal)) from refusal
 
     try:
         route = set_domain(session, user.id, domain)
