@@ -193,3 +193,56 @@ def test_postmark_pending_approval_is_still_temporary(monkeypatch):
     capture(monkeypatch, status_code=422, body={
         "ErrorCode": 412, "Message": "While your account is pending approval..."})
     assert _post_to_provider("dana@acme.example", "s", "b").permanent is False
+
+
+# --------------------------------- one decision, one wording, everywhere it is read
+
+
+def test_the_reply_subject_states_the_verdict_the_dashboard_states():
+    """The organizer and the ledger owner must be shown the same sentence.
+
+    These had drifted into three phrasings of one decision — "Should be an email" on the
+    dashboard, "Worth the room" in the ledger, "could be an email" in the subject line —
+    so the person who received the reply and the person reading the ledger were looking at
+    the same verdict described differently.
+    """
+    from app.enums import Tier, Verdict
+    from app.schemas.invite import ParsedInvite
+    from app.services.email import compose_reply
+    from app.services.pipeline import analyze
+
+    flagged = analyze(ParsedInvite(
+        title="Weekly status update",
+        description="Each workstream posts where it got to.",
+        attendee_tiers=[Tier.IC] * 8,
+    ))
+    kept = analyze(ParsedInvite(
+        title="Q4 pricing decision",
+        description="We need to agree the floor before the board meets.",
+        attendee_tiers=[Tier.EXEC] * 3,
+    ))
+
+    assert flagged.verdict is Verdict.EMAIL
+    assert kept.verdict is Verdict.KEEP
+    assert compose_reply(flagged)[0].startswith(f"{flagged.title} — {Verdict.EMAIL.label}")
+    assert compose_reply(kept)[0].startswith(f"{kept.title} — {Verdict.KEEP.label}")
+
+    # And the body says it the same way as its own subject, not a second phrasing.
+    subject, body = compose_reply(flagged)
+    assert Verdict.EMAIL.label in body
+
+
+def test_the_verdict_wording_matches_the_frontend_copy():
+    """The two live in different languages, so nothing but a test keeps them in step."""
+    import re
+    from pathlib import Path
+
+    from app.enums import Verdict
+
+    source = (Path(__file__).resolve().parents[2] / "frontend/src/lib/verdict.js").read_text()
+    labels = dict(re.findall(r"(\w+):\s*\{\s*label:\s*'([^']+)'", source))
+
+    assert labels == {
+        "email": Verdict.EMAIL.label,
+        "keep": Verdict.KEEP.label,
+    }, "frontend/src/lib/verdict.js and app/enums.py disagree about the wording"

@@ -49,7 +49,10 @@ def _attendees(count: int) -> str:
 def compose_reply(analysis: MeetingAnalysis) -> tuple[str, str]:
     """The subject and body sent back to the organizer. Pure — no I/O, no secrets."""
     flagged = analysis.verdict is Verdict.EMAIL
-    headline = "could be an email" if flagged else "is worth the room"
+    # The same sentence the dashboard and the ledger row show. The organizer reading this
+    # subject and the user reading their ledger are looking at one decision, so they must
+    # not be given two different phrasings of it.
+    headline = analysis.verdict.label
     subject = f"{analysis.title} — {headline} ({analysis.score}/10)"
 
     charged = billable_minutes(analysis.duration_minutes)

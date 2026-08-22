@@ -409,3 +409,57 @@ def test_verdict_casing_and_padding_are_tolerated():
     )
 
     assert scoring._parse_analysis(raw)["verdict"] == "email"
+
+
+# ------------------------------- reasoning tokens come out of the output budget
+
+
+def test_the_openai_call_caps_how_much_the_model_may_think(monkeypatch):
+    """The bug that made every real analysis fail, pinned.
+
+    `max_output_tokens` covers the model's internal reasoning as well as its answer, and
+    the reasoning is spent first. With no cap on effort, gpt-5-nano used 1152 of a 1200
+    budget thinking and returned zero characters — so every meeting scored against the
+    real provider fell back to a neutral keep verdict. Sending an effort cap is what
+    leaves room for the answer.
+    """
+    sent = {}
+
+    class FakeOpenAI:
+        def __init__(self, api_key):
+            self.responses = SimpleNamespace(create=self.create)
+
+        def create(self, **kwargs):
+            sent.update(kwargs)
+            return SimpleNamespace(status="completed", output_text="{}")
+
+    monkeypatch.setitem(sys.modules, "openai", SimpleNamespace(OpenAI=FakeOpenAI))
+
+    scoring._call_openai("prompt", "test-key")
+
+    assert sent["reasoning"] == {"effort": scoring.LLM_EFFORT}
+    assert scoring.LLM_EFFORT in {"none", "minimal", "low"}, (
+        "the whole point is to leave budget for the answer"
+    )
+
+
+def test_the_default_budget_covers_reasoning_and_not_just_the_answer():
+    """Measured usage at the default is ~950 tokens, ~700 of it reasoning.
+
+    A default sized for the visible JSON alone is the failure this regressed from, so the
+    floor here is well above the answer's share on purpose.
+    """
+    assert scoring.DEFAULT_LLM_MAX_TOKENS >= 3000
+
+
+def test_the_token_message_does_not_send_the_user_to_shorten_the_agenda(monkeypatch):
+    """A longer agenda barely moves reasoning usage, so that advice was a dead end."""
+    monkeypatch.setenv("SHOULDBE_USE_STUB", "0")
+    monkeypatch.setattr(scoring, "_call_llm", lambda prompt: (_ for _ in ()).throw(
+        RuntimeError("response stopped because max_output_tokens was reached")
+    ))
+
+    notice = score_meeting(**STANDUP)["analysis_notice"]
+
+    assert "raise LLM_MAX_TOKENS" in notice
+    assert "shorten" not in notice.lower()

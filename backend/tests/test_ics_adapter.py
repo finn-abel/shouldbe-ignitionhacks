@@ -200,7 +200,10 @@ def test_a_kept_meeting_reply_offers_no_replacement_email():
     subject, body = compose_reply(analysis)
 
     assert analysis.verdict is Verdict.KEEP
-    assert "worth the room" in subject
+    # Asserted through the shared label rather than a copy of the string: the wording is
+    # said on the dashboard, in the ledger, and here, and a test holding its own copy is
+    # how those three drift apart without anything going red.
+    assert Verdict.KEEP.label in subject
     assert "could replace it" not in body
 
 

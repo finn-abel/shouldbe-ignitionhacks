@@ -96,6 +96,9 @@ class User(Base):
     tier_rates: Mapped[list["RoleTierRate"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
+    people: Mapped[list["Person"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
     budget: Mapped["Budget | None"] = relationship(
         back_populates="user", cascade="all, delete-orphan", uselist=False
     )
@@ -119,6 +122,73 @@ class RoleTierRate(Base):
     hourly_rate: Mapped[Decimal] = mapped_column(MONEY, nullable=False)
 
     user: Mapped[User] = relationship(back_populates="tier_rates")
+
+
+class Person(Base):
+    """One known colleague and the role tier their time is priced at.
+
+    The directory is what turns "18 email addresses on an invite" into a real cost. An
+    .ics carries no role information, so without this every attendee is priced at the
+    lowest tier and every emailed meeting is understated (see
+    `ics_adapter.DEFAULT_ATTENDEE_TIER`).
+
+    Still not individual compensation: a row says which *blended tier* a person is priced
+    at, never what they are paid. The rate lives on `role_tier_rates`, shared by everyone
+    in the tier, so doc 1's privacy stance holds — this adds no number that is about one
+    person.
+
+    Scoped per user, not global: two accounts may legitimately place the same colleague at
+    different tiers, and one user's directory must never leak into another's ledger.
+    """
+
+    __tablename__ = "people"
+    __table_args__ = (UniqueConstraint("user_id", "email", name="uq_person_per_user"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    # Normalized by `services.directory.person_key` before it ever reaches this column, so
+    # `Ada@Corp.com` and `ada@corp.com` are one person rather than two half-priced ones.
+    email: Mapped[str] = mapped_column(String(320), nullable=False, index=True)
+    tier: Mapped[Tier] = _enum_column(Tier, nullable=False)
+    display_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime, nullable=False, default=_utcnow)
+
+    user: Mapped[User] = relationship(back_populates="people")
+
+
+class MeetingAttendee(Base):
+    """One seat in one meeting, at the rate it was actually billed.
+
+    `Meeting.attendee_tiers` is the aggregate the cost math consumes; these rows are the
+    per-seat detail that makes a *correction* possible later. Two things are stored that
+    cannot be recovered afterwards:
+
+    - `email`, so an unidentified attendee can be identified at all. The .ics adapter used
+      to discard addresses the moment it counted them.
+    - `hourly_rate`, the blended tier rate this seat was priced at. Identifying one person
+      then re-prices only their seat, and every other seat keeps exactly what it cost —
+      which is the difference between correcting a guess and re-writing history.
+
+    `is_assumed` separates the two: true means nobody ever said who this was and the seat
+    was priced at the default tier. Only assumed seats are ever re-priced.
+    """
+
+    __tablename__ = "meeting_attendees"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    meeting_id: Mapped[int] = mapped_column(
+        ForeignKey("meetings.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    # Order is preserved so the seat list lines up with `Meeting.attendee_tiers`.
+    position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # "" for a manual-form seat: Door B asks for head counts per tier, not addresses, so
+    # those seats are known-by-construction and have nobody to identify.
+    email: Mapped[str] = mapped_column(String(320), nullable=False, default="", index=True)
+    tier: Mapped[Tier] = _enum_column(Tier, nullable=False)
+    hourly_rate: Mapped[Decimal] = mapped_column(MONEY, nullable=False)
+    is_assumed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, index=True)
+
+    meeting: Mapped["Meeting"] = relationship(back_populates="attendees")
 
 
 class Budget(Base):
@@ -209,6 +279,22 @@ class Meeting(Base):
     created_at: Mapped[datetime] = mapped_column(UtcDateTime, nullable=False, default=_utcnow, index=True)
 
     user: Mapped[User] = relationship(back_populates="meetings")
+    attendees: Mapped[list["MeetingAttendee"]] = relationship(
+        back_populates="meeting",
+        cascade="all, delete-orphan",
+        order_by="MeetingAttendee.position",
+    )
+
+    # Read by `MeetingRead` through `from_attributes`. Both are empty for a meeting
+    # recorded before seats were stored, which reads correctly: nothing to identify.
+    @property
+    def attendee_emails(self) -> list[str]:
+        return [seat.email for seat in self.attendees]
+
+    @property
+    def unidentified_count(self) -> int:
+        """Seats priced on a guess. Non-zero means this row is an estimate, not a figure."""
+        return sum(1 for seat in self.attendees if seat.is_assumed and seat.email)
 
 
 class InboundRoute(Base):

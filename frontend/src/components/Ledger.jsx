@@ -1,10 +1,7 @@
 import { useState } from 'react';
 import { formatMoney, formatMoneyExact, hasAmount } from '../lib/format.js';
-
-const VERDICT = {
-  email: { label: 'Should be an email', tone: 'leak' },
-  keep: { label: 'Worth the room', tone: 'defend' },
-};
+import { ASSUMED_TIER, tierLabel } from '../lib/tiers.js';
+import { verdictOf } from '../lib/verdict.js';
 
 const STATUS = { analyzed: 'On the books', held: 'Held', converted: 'Converted' };
 
@@ -31,7 +28,7 @@ export default function Ledger({ meetings, onConvert, converting }) {
   return (
     <ul className="ledger">
       {meetings.map((meeting) => {
-        const verdict = VERDICT[meeting.verdict];
+        const verdict = verdictOf(meeting.verdict);
         const isWorst = meeting.id === worstOffender?.id;
         const isOpen = meeting.id === openId;
 
@@ -54,11 +51,15 @@ export default function Ledger({ meetings, onConvert, converting }) {
               </span>
 
               <span className="entry__meta">
-                <span className={`badge badge--${verdict.tone}`}>{verdict.label}</span>
                 <span className="entry__status">{STATUS[meeting.status]}</span>
               </span>
 
               <span className="entry__money">
+                {/* Directly above the occurrence cost, and stated rather than badged:
+                    the row's whole point is the call, and the figure is what backs it. */}
+                <span className={`verdict-line verdict-line--${verdict.tone}`}>
+                  {verdict.label}
+                </span>
                 <span className="entry__cost figure">{formatMoneyExact(meeting.cost)}</span>
                 {hasAmount(meeting.annualized_cost) && (
                   <span className="entry__annual figure">
@@ -98,6 +99,14 @@ export default function Ledger({ meetings, onConvert, converting }) {
                     </dd>
                   </div>
                 </dl>
+                {meeting.unidentified_count > 0 && (
+                  <p className="entry__estimate">
+                    {meeting.unidentified_count} attendee
+                    {meeting.unidentified_count === 1 ? '' : 's'} unidentified — billed at{' '}
+                    {tierLabel(ASSUMED_TIER)}, so this is a floor. Give them roles under
+                    Settings → People and this meeting re-prices itself.
+                  </p>
+                )}
                 {meeting.alternative_email && (
                   <div className="draft">
                     <div className="draft__head">

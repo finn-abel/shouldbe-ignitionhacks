@@ -15,12 +15,14 @@ from sqlalchemy import delete, select
 
 from app.data.db import SessionLocal, init_db
 from app.data.meetings import save_analysis
-from app.data.models import EmailOutbox, Meeting
+from app.data.models import EmailOutbox, Meeting, MeetingAttendee, Person
+from app.data.people import tier_map, upsert_person
 from app.data.tiers import get_tier_rates
 from app.data.inbound_routes import set_domain
 from app.data.users import get_or_create_guest
 from app.enums import Status, Tier
 from app.schemas.invite import ParsedInvite
+from app.services.directory import resolved_invite
 from app.services.pipeline import analyze
 
 # The seeded spend meaningfully exceeds this, so the dashboard opens "over budget" (§7).
@@ -35,6 +37,33 @@ ORGANIZER = "ops@northwind.example"
 # It also means the domain-claim feature is visibly exercised on a fresh database.
 GUEST_DOMAIN = "northwind.example"
 
+# The demo's cast, in the order they sit in the standup. Named addresses rather than head
+# counts because the standup is the drill-down, and the point of the drill-down is now
+# *who* is in the room — an emailed invite carries addresses, and the directory is what
+# turns them into a cost.
+STANDUP_ROOM = (
+    [(f"{name}@northwind.example", Tier.IC)
+     for name in ("ada", "bo", "cy", "dee", "eli", "fay", "gus", "hal", "ivy", "jon", "kai", "lee")]
+    + [(f"{name}@northwind.example", Tier.SENIOR)
+       for name in ("mia", "noor", "omar", "pia", "quinn")]
+    + [("rae@northwind.example", Tier.MANAGER)]
+)
+
+# Four of the standup's ICs are deliberately left out of the directory, so a fresh demo
+# opens with a real worklist: four addresses ShouldBe has seen and cannot price properly.
+# They are all ICs, so the seeded figures are exactly what they were before the directory
+# existed — identifying them is what moves the number, and it moves it live.
+UNPLACED = frozenset(
+    f"{name}@northwind.example" for name in ("ivy", "jon", "kai", "lee")
+)
+
+# What the guest knows. Everyone in the standup except the four above, plus the guest's
+# own role — the one entry every user can answer, and the one that makes their own
+# meetings price correctly.
+SEEDED_DIRECTORY = {
+    email: tier for email, tier in STANDUP_ROOM if email not in UNPLACED
+} | {"guest@shouldbe.local": Tier.MANAGER}
+
 # (invite, days ago, final status). Titles are chosen so the scoring rubric reaches the
 # intended verdict on its own — nothing here overrides the engine.
 CURATED = [
@@ -44,7 +73,8 @@ CURATED = [
         title="All-hands engineering standup",
         description="Every team reads out what they did yesterday and what they will do today.",
         duration_minutes=30,
-        attendee_tiers=[Tier.IC] * 12 + [Tier.SENIOR] * 5 + [Tier.MANAGER],
+        attendee_tiers=[tier for _, tier in STANDUP_ROOM],
+        attendee_emails=[email for email, _ in STANDUP_ROOM],
         organizer_email=ORGANIZER,
         is_recurring=True,
         recurrence_freq="WEEKLY",
@@ -178,16 +208,35 @@ def seed():
         # database that has taken real invites trips the foreign key.
         stale = select(Meeting.id).where(Meeting.user_id == guest.id)
         session.execute(delete(EmailOutbox).where(EmailOutbox.meeting_id.in_(stale)))
+        session.execute(delete(MeetingAttendee).where(MeetingAttendee.meeting_id.in_(stale)))
         session.execute(delete(Meeting).where(Meeting.user_id == guest.id))
+        # The directory is re-seeded too, so a reset puts the four unplaced people back on
+        # the worklist. Otherwise the second demo of the day opens with nothing to identify.
+        session.execute(delete(Person).where(Person.user_id == guest.id))
         guest.budget.monthly_amount = GUEST_BUDGET
         session.commit()
 
         set_domain(session, guest.id, GUEST_DOMAIN)
 
+        for email, tier in SEEDED_DIRECTORY.items():
+            upsert_person(session, guest.id, email, tier, commit=False)
+        session.commit()
+
         rates = get_tier_rates(session, guest.id)
+        known = tier_map(session, guest.id)
 
         for invite, days_ago, status in CURATED:
-            meeting = save_analysis(session, guest.id, analyze(invite, rates))
+            # Through the directory, exactly as an emailed invite goes. The curated tiers
+            # and the seeded roles agree by construction, so this changes no figure — it
+            # is what makes the four unplaced seats *recorded* as the guesses they are.
+            resolved = resolved_invite(invite, known)
+            meeting = save_analysis(
+                session,
+                guest.id,
+                analyze(resolved, rates),
+                tier_rates=rates,
+                known_people=known,
+            )
             meeting.created_at = _placed_within_this_month(days_ago, now)
             if status is Status.CONVERTED:
                 meeting.status = Status.CONVERTED

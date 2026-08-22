@@ -1,10 +1,6 @@
 import { useState } from 'react';
 import { formatMoney, formatMoneyExact, hasAmount } from '../lib/format.js';
-
-const VERDICT = {
-  email: { label: 'Should be an email', tone: 'leak' },
-  keep: { label: 'Worth the room', tone: 'defend' },
-};
+import { verdictOf } from '../lib/verdict.js';
 
 /** The analysis of one meeting — the money first, the reasoning second, the replacement last. */
 export default function AnalysisResult({ analysis }) {
@@ -38,7 +34,7 @@ export default function AnalysisResult({ analysis }) {
     );
   }
 
-  const verdict = VERDICT[analysis.verdict];
+  const verdict = verdictOf(analysis.verdict);
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(analysis.alternative_email);
@@ -52,6 +48,9 @@ export default function AnalysisResult({ analysis }) {
   return (
     <aside className={`result result--${verdict.tone}`} aria-live="polite">
       <header className="result__head">
+        {/* The call sits above the money on purpose. The figure is the evidence; this is
+            the answer to the question the user actually asked. */}
+        <p className={`verdict-line verdict-line--${verdict.tone}`}>{verdict.label}</p>
         <p className="eyebrow">This occurrence costs</p>
         <p className="result__figure figure">{formatMoney(analysis.cost)}</p>
         <p className="result__exact figure">{formatMoneyExact(analysis.cost)}</p>
@@ -79,8 +78,9 @@ export default function AnalysisResult({ analysis }) {
         </div>
       </dl>
 
-      <div className="result__verdict">
-        <span className={`badge badge--${verdict.tone}`}>{verdict.label}</span>
+      {/* The verdict badge used to sit here too. It is stated above the cost now, and
+          saying it twice on one card reads as two findings rather than one. */}
+      <div className="result__verdict result__verdict--score-only">
         <span className="score">
           <span className="score__value figure">{analysis.score}</span>
           <span className="score__scale">/10 necessity</span>

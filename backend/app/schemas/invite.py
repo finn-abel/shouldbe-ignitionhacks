@@ -54,6 +54,12 @@ class ParsedInvite(BaseModel):
     start: datetime | None = None
     duration_minutes: int = Field(default=DEFAULT_DURATION_MINUTES, ge=0)
     attendee_tiers: list[Tier] = Field(default_factory=list, max_length=MAX_ATTENDEES)
+    # Positionally aligned with `attendee_tiers`: entry i is who seat i is. Empty for a
+    # door that has no addresses to give (the manual form counts heads per tier), and `""`
+    # for an individual seat whose address could not be read. Carrying them is what lets
+    # an attendee be identified after the fact — the .ics adapter used to count the
+    # addresses and throw them away, which made every emailed meeting permanently a guess.
+    attendee_emails: list[str] = Field(default_factory=list, max_length=MAX_ATTENDEES)
     organizer_email: str = ""
     is_recurring: bool = False
     recurrence_freq: str | None = None
@@ -71,6 +77,36 @@ class ParsedInvite(BaseModel):
             self, "recurrence_freq", normalised_recurrence(self.is_recurring, self.recurrence_freq)
         )
         return self
+
+    @model_validator(mode="after")
+    def _emails_line_up_with_tiers(self):
+        """An address list, if given at all, must have one entry per seat.
+
+        A short list would silently shift every address onto the wrong attendee — seat 5's
+        tier attributed to seat 4's person — and identifying someone would then re-price
+        the wrong seat. Padding is the fix rather than raising: a door that reads only some
+        addresses should still record the meeting.
+        """
+        if self.attendee_emails and len(self.attendee_emails) != len(self.attendee_tiers):
+            padded = (list(self.attendee_emails) + [""] * len(self.attendee_tiers))[
+                : len(self.attendee_tiers)
+            ]
+            object.__setattr__(self, "attendee_emails", padded)
+        return self
+
+    def with_seats(self, seats) -> "ParsedInvite":
+        """A copy priced for these seats — the directory applied, nothing mutated.
+
+        `seats` is a list of `services.directory.Seat`. Returns a new invite rather than
+        editing this one, so the raw parse of what arrived stays intact next to the
+        resolved version of it.
+        """
+        return self.model_copy(
+            update={
+                "attendee_tiers": [seat.tier for seat in seats],
+                "attendee_emails": [seat.email for seat in seats],
+            }
+        )
 
 
 class ManualMeetingInput(BaseModel):

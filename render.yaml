@@ -79,6 +79,15 @@ services:
         value: openai
       - key: OPENAI_MODEL
         value: gpt-5-nano
+
+      # gpt-5-nano is a reasoning model, so this budget covers its thinking as well as its
+      # answer — and the thinking is spent first. Set for the answer alone it starves the
+      # response and every meeting silently falls back to a neutral keep verdict. Stated
+      # here rather than left to the default so it is visible before someone flips
+      # SHOULDBE_USE_STUB to 0 in production.
+      - key: LLM_MAX_TOKENS
+        value: "4000"
+
       - key: OPENAI_API_KEY
         sync: false
 

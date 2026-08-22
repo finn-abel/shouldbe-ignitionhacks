@@ -18,7 +18,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from app.config import env_flag, is_deployed
 from app.data.db import init_db
-from app.routes import analyze, auth, budget, inbound_route, meetings, tiers, webhook
+from app.routes import analyze, auth, budget, inbound_route, meetings, people, tiers, webhook
 from app.seed import seed_if_empty
 from app.services.email import drain_outbox_in_new_session
 
@@ -234,7 +234,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-for module in (analyze, meetings, budget, tiers, auth, webhook, inbound_route):
+for module in (analyze, meetings, budget, tiers, people, auth, webhook, inbound_route):
     app.include_router(module.router)
 
 

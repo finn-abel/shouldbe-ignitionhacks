@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.data.db import get_session
 from app.data.meetings import save_analysis
 from app.data.models import User
+from app.data.people import tier_map
 from app.data.tiers import get_tier_rates
 from app.routes.auth import acting_user
 from app.schemas.api import MeetingRead
@@ -33,5 +34,15 @@ def analyze_meeting(
     # Priced with this user's own tier rates, so editing them changes what new meetings
     # cost (doc 3 step 9). Meetings already on the books keep the cost they were priced
     # at — a ledger records what happened.
-    analysis = analyze(form.to_parsed_invite(), get_tier_rates(session, user.id))
-    return save_analysis(session, user.id, analysis)
+    rates = get_tier_rates(session, user.id)
+    analysis = analyze(form.to_parsed_invite(), rates)
+    # Door B names no addresses — it asks for head counts per tier — so every seat here is
+    # known by construction and there is nobody to identify later. The directory is passed
+    # anyway so the "was this a guess?" question has one answer on every door.
+    return save_analysis(
+        session,
+        user.id,
+        analysis,
+        tier_rates=rates,
+        known_people=tier_map(session, user.id),
+    )
