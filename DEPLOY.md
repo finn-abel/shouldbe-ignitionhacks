@@ -92,8 +92,15 @@ verification review and shows no "unverified app" wall.
 
 | | Where | Set |
 |---|---|---|
-| Postmark **receives** | MX on your invite subdomain → `inbound.postmarkapp.com` | `POSTMARK_TOKEN`, `SHOULDBE_INBOX`, `POSTMARK_WEBHOOK_SECRET` |
+| Postmark **receives** | MX on your invite subdomain → `inbound.postmarkapp.com` | `POSTMARK_TOKEN`, `POSTMARK_WEBHOOK_SECRET` |
 | Resend **sends** | domain verified at resend.com/domains | `RESEND_API_KEY`, `RESEND_FROM` |
+
+`SHOULDBE_INBOX` is no longer in that list because the blueprint now ships it as a
+literal value — it is a public address, not a secret. Every user's invite address is
+derived from it, so when it is blank the whole email door degrades to
+`ledger+<token>@example.invalid` while the app otherwise looks fine. Change it in
+`render.yaml` if you use a different domain; the API logs a warning at boot if it is
+somehow empty on a deployed instance.
 
 Postmark's inbound webhook URL is
 `https://<your-api-url>/webhook/inbound-email?token=<POSTMARK_WEBHOOK_SECRET>`. The
@@ -132,6 +139,7 @@ you present.
 | `Could not reach the ShouldBe API` | `VITE_API_BASE_URL` wrong, or baked in before you set it | Set it, then **redeploy** the static site |
 | Build fails: `Can't load plugin: sqlalchemy.dialects:postgres` | An old checkout without the URL normalization | Deploy a branch that includes `app/data/db.py`'s `_normalize_url` |
 | `redirect_uri_mismatch` on Google | Callback built as `http://` behind the proxy | Confirm `--forwarded-allow-ips="*"` is in the start command |
+| Invite address reads `…@example.invalid` | `SHOULDBE_INBOX` blank on `shouldbe-api` | Set it (or re-sync the blueprint), restart the API |
 | Dashboard is empty | Seed skipped, or the DB already had a guest row with no meetings | Render Shell on `shouldbe-api`: `python -m app.seed` |
 | First request after a quiet spell errors | Stale pooled connection | Already handled by `pool_pre_ping`; if it persists, check the DB is not suspended |
 | Numbers drifted from people clicking around | Shared guest user | Render Shell: `python -m app.seed` (destructive reset of guest data) |

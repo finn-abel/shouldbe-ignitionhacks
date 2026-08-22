@@ -30,6 +30,25 @@ class Verdict(Enum):
     KEEP = "keep"
     EMAIL = "email"
 
+    @property
+    def label(self) -> str:
+        """How the verdict is worded wherever a person reads it.
+
+        One source for the sentence, because it is said in three places that must agree:
+        the dashboard, the ledger row, and the subject line of the reply that goes to the
+        organizer. Those had drifted into three different phrasings of the same call —
+        "Should be an email", "Worth the room", "could be an email" — so an organizer
+        reading their inbox and a user reading the ledger saw different words for one
+        decision. The frontend's `lib/verdict.js` carries the same two strings.
+        """
+        return _VERDICT_LABELS[self]
+
+
+_VERDICT_LABELS = {
+    Verdict.EMAIL: "Should Be an email",
+    Verdict.KEEP: "Should Be a meeting",
+}
+
 
 class Status(Enum):
     """Lifecycle / money state (doc 2 §6).

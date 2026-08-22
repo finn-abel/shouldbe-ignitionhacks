@@ -40,11 +40,14 @@ Core capabilities:
 
 1. A meeting enters ShouldBe from the manual analysis form or from an emailed `.ics`
    invite.
-2. The backend prices the meeting from the configured role-tier rates.
-3. The scoring service evaluates whether the meeting should stay live or become an email.
-4. Budget guardrails compare projected monthly spend against the active user, team, or
+2. Attendee addresses are resolved against the user's people directory, so each seat is
+   priced at that person's role tier. An address nobody has placed is priced at the floor
+   tier and flagged as a guess rather than passed off as a figure.
+3. The backend prices the meeting from the configured role-tier rates.
+4. The scoring service evaluates whether the meeting should stay live or become an email.
+5. Budget guardrails compare projected monthly spend against the active user, team, or
    department budget.
-5. The meeting is written to the ledger, where the dashboard tracks total spend,
+6. The meeting is written to the ledger, where the dashboard tracks total spend,
    necessary spend, avoidable spend, reclaimed savings, and remaining budget.
 
 The backend owns all financial logic. The frontend never recomputes dollar totals; it
@@ -236,7 +239,7 @@ SHOULDBE_USE_STUB=0
 LLM_PROVIDER=openai
 OPENAI_MODEL=gpt-5-nano
 OPENAI_API_KEY=sk-...
-LLM_MAX_TOKENS=1200
+LLM_MAX_TOKENS=4000
 ```
 
 Validate one scoring call:
@@ -246,6 +249,13 @@ cd backend
 source venv/bin/activate
 python spike_llm.py
 ```
+
+`LLM_MAX_TOKENS` is the budget for one scoring call, and on a reasoning model it covers
+the model's own reasoning as well as the answer — with the reasoning spent first. Sized
+for the answer alone it starves the response: at 1200, gpt-5-nano used 1152 tokens
+thinking and returned nothing. ShouldBe also caps reasoning effort (`LLM_EFFORT`) so the
+thinking cannot consume the whole allowance. Measured usage at the default is ~950 tokens,
+and you are billed for tokens used rather than for the cap.
 
 If the AI provider fails, rate-limits, refuses, or runs out of output tokens, ShouldBe
 records a neutral keep verdict and returns a specific warning to the UI instead of
@@ -301,6 +311,33 @@ so future invites organized by that domain are attributed correctly.
 
 Inbound email is optional. When email is not configured, the manual analysis flow and
 dashboard still work normally.
+
+## People and Role Tiers
+
+A calendar invite carries email addresses and no job titles, so ShouldBe cannot know what
+a room costs until it is told who is in it. **Settings → People** is where that is
+answered:
+
+- **Your own role**, which prices every meeting you attend.
+- **Anyone you add**, by address and tier, before they ever appear on an invite.
+- **The unidentified worklist** — addresses already seen in your ledger that nobody has
+  placed, busiest first.
+
+Until an address is placed, its seat is billed at the floor tier (`IT-02`) and the seat is
+recorded as a guess. The ledger marks those meetings as estimates rather than figures.
+
+Naming someone corrects the past as well as the future: every meeting that guessed at them
+is re-priced, and the dashboard totals move with it. Two rules keep that from becoming a
+rewrite of history:
+
+- Only seats that were *assumed* are ever re-priced. A seat whose tier was known when the
+  meeting was priced keeps that price forever — which is the same reason editing an hourly
+  rate never reaches backwards.
+- Only the corrected seat takes a new rate. Every other seat in the room is re-summed at
+  the rate stored on it.
+
+Placing a person records a **tier**, never a salary. Rates are blended per tier and shared
+by everyone in it, so no screen and no email can show one person's number.
 
 ## Deployment
 

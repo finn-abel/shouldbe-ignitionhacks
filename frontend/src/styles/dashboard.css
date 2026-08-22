@@ -1478,3 +1478,172 @@
 
 /* Money in flight: the figures are the server's, so they dim rather than guess. */
 .tiles--settling { opacity: 0.55; transition: opacity var(--duration) var(--ease); }
+
+/* --- People directory -------------------------------------------------------
+   Three groups in one panel, distinguished by weight rather than by boxes: the
+   self row sits raised, unidentified rows carry the leak edge that flags a guess
+   everywhere else in the product, and placed rows are quiet. */
+
+.settings__people {
+  display: grid;
+  gap: var(--gap-tight);
+}
+
+.people-heading {
+  display: flex;
+  align-items: baseline;
+  gap: var(--gap-hair);
+  flex-wrap: wrap;
+  margin: var(--gap-hair) 0 0;
+  color: var(--ink-faint);
+  font-size: var(--text-sm);
+}
+
+.people-rows {
+  display: grid;
+  gap: 1px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-card);
+  overflow: hidden;
+  background: var(--rule);
+}
+
+.people-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(11rem, 15rem) minmax(6rem, auto);
+  align-items: center;
+  gap: var(--gap-tight);
+  padding: var(--gap-tight);
+  background: var(--paper-raised);
+}
+
+.people-row--self {
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-card);
+  background:
+    linear-gradient(var(--brand-wash), var(--brand-wash)) padding-box,
+    var(--paper-raised);
+}
+
+/* An unplaced address is a guess inside the figures, so it wears the edge the
+   ledger already uses for money that is leaking. */
+.people-row--unknown { box-shadow: inset 2px 0 0 var(--leak); }
+
+.people-row--pending { background: var(--accent-wash); }
+
+.people-row__who {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.people-row__name {
+  color: var(--ink);
+  font-size: var(--text-sm);
+  font-weight: 620;
+}
+
+.people-row__email {
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
+
+.people-row__meta,
+.people-row__note {
+  color: var(--ink-faint);
+  font-size: var(--text-xs);
+}
+
+.people-row__note { text-align: right; }
+
+.people-row__forget {
+  justify-self: end;
+  padding: 0.3rem 0.6rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: var(--text-xs);
+  cursor: pointer;
+  transition: color var(--duration) var(--ease), border-color var(--duration) var(--ease);
+}
+
+.people-row__forget:hover {
+  border-color: var(--leak);
+  color: var(--leak);
+}
+
+.people-add {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(11rem, 15rem) auto;
+  align-items: end;
+  gap: var(--gap-tight);
+  padding: var(--gap-tight);
+  border: 1px dashed var(--rule-strong);
+  border-radius: var(--radius-card);
+}
+
+.people-add .field__input { max-width: none; width: 100%; }
+
+/* An estimate, marked as one. The ledger says a figure is a floor rather than
+   letting a guess read exactly like a number that was actually known. */
+.entry__estimate {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-top: var(--gap-hair);
+  padding: 0.2rem 0.45rem;
+  border-radius: var(--radius);
+  background: var(--accent-wash);
+  color: var(--ink-soft);
+  font-size: var(--text-xs);
+}
+
+@media (max-width: 720px) {
+  .people-row,
+  .people-add {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+  }
+
+  .people-row__note { text-align: left; }
+  .people-row__forget { justify-self: start; }
+}
+
+/* --- The verdict, stated above the money -----------------------------------
+   Not a badge: a badge reads as one attribute among several, and this is the
+   answer the whole row exists to give. Uppercase and tracked so it holds its
+   own directly above a large figure without competing with it for size. */
+
+.verdict-line {
+  margin: 0;
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  line-height: 1.2;
+}
+
+.verdict-line--leak { color: var(--leak); }
+.verdict-line--defend { color: var(--defend); }
+
+/* In the ledger the money column is right-aligned, so the verdict follows it. */
+.entry__money .verdict-line {
+  margin-bottom: 0.1rem;
+  text-align: right;
+}
+
+/* On the analysis card it sits above the eyebrow, with room before the figure. */
+.result__head .verdict-line {
+  margin-bottom: 0.35rem;
+  font-size: var(--text-sm);
+  letter-spacing: 0.05em;
+}
+
+/* The badge that used to share this row is gone, so the score no longer needs a
+   column beside it. */
+.result__verdict--score-only { grid-template-columns: 1fr; }

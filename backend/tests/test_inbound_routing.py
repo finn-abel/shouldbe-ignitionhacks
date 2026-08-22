@@ -165,6 +165,36 @@ def test_an_already_tagged_inbox_is_not_double_tagged(monkeypatch):
     assert invite_address_for("ab12cd") == "ledger+ab12cd@invite.example.com"
 
 
+def test_an_unset_inbox_yields_a_visibly_unroutable_address(monkeypatch):
+    """The fallback is deliberately in a reserved TLD, not a plausible-looking host.
+
+    Production ran for a while with SHOULDBE_INBOX blank and every user's door read
+    `…@example.invalid`. The placeholder is what made that diagnosable rather than a
+    mystery about vanishing invites, so it is pinned.
+    """
+    monkeypatch.delenv("SHOULDBE_INBOX", raising=False)
+
+    assert invite_address_for("ab12cd").endswith("@example.invalid")
+
+
+def test_a_deployed_app_says_so_when_the_inbox_is_unset(monkeypatch, caplog):
+    """The boot-time warning, because the UI's small print was too easy to miss."""
+    from app.main import _warn_if_no_inbox
+
+    monkeypatch.setenv("SHOULDBE_ENV", "production")
+    monkeypatch.delenv("SHOULDBE_INBOX", raising=False)
+
+    with caplog.at_level("WARNING"):
+        _warn_if_no_inbox()
+    assert "SHOULDBE_INBOX" in caplog.text
+
+    caplog.clear()
+    monkeypatch.setenv("SHOULDBE_INBOX", "ledger@invite.example.com")
+    with caplog.at_level("WARNING"):
+        _warn_if_no_inbox()
+    assert not caplog.text
+
+
 # ------------------------------------------- regression: ShouldBe billing itself
 
 

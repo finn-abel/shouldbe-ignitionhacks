@@ -1,38 +1,9 @@
 import { useEffect, useState } from 'react';
 import { getBudget, getTierRates, updateBudget, updateTierRates } from '../api/client.js';
 import EmailDoor from './EmailDoor.jsx';
+import People from './People.jsx';
+import { TIERS } from '../lib/tiers.js';
 import { formatMoney, formatMoneyExact } from '../lib/format.js';
-
-const TIERS = [
-  {
-    key: 'ic',
-    label: 'IT-02',
-    note: 'intermediate delivery, analysis, development',
-    salary: '$85,854-$105,080',
-    rate: '48.96',
-  },
-  {
-    key: 'senior',
-    label: 'IT-03',
-    note: 'senior specialist, technical lead',
-    salary: '$101,343-$125,914',
-    rate: '58.27',
-  },
-  {
-    key: 'manager',
-    label: 'IT-04',
-    note: 'manager, architect, specialized expert',
-    salary: '$116,037-$144,434',
-    rate: '66.79',
-  },
-  {
-    key: 'exec',
-    label: 'EX-03 / DG',
-    note: 'Director General reference level',
-    salary: '$172,548-$202,918',
-    rate: '96.27',
-  },
-];
 
 const FEDERAL_REFERENCE_RATES = Object.fromEntries(TIERS.map(({ key, rate }) => [key, rate]));
 const LEGACY_PLACEHOLDER_RATES = { ic: '75', senior: '110', manager: '150', exec: '250' };
@@ -351,6 +322,8 @@ export default function Settings({ theme, onThemeChange, onSaved }) {
           </p>
         </div>
       </section>
+
+      <People onRepriced={onSaved} />
 
       <EmailDoor />
 

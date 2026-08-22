@@ -43,6 +43,7 @@ def analyze(
         duration_minutes=invite.duration_minutes,
         attendee_count=invite.attendee_count,
         attendee_tiers=invite.attendee_tiers,
+        attendee_emails=invite.attendee_emails,
         organizer_email=invite.organizer_email,
         is_recurring=invite.is_recurring,
         recurrence_freq=invite.recurrence_freq,

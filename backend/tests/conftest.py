@@ -17,6 +17,25 @@ import pytest
 
 
 @pytest.fixture(autouse=True)
+def scoring_stays_offline(monkeypatch):
+    """Never spend the developer's LLM budget to run the tests.
+
+    `load_dotenv()` runs at import of `app.main`, so the moment any test builds the app it
+    loads the developer's real `SHOULDBE_USE_STUB=0` and API key into the process — and
+    every test after it in the same session quietly makes live provider calls. That is not
+    hypothetical: it took this suite from 2 seconds to several minutes and billed a real
+    account for it, while the guard below sat one layer too low to catch it (the provider
+    SDKs use their own HTTP clients, not `httpx.post`).
+
+    Tests that exercise the real-provider path patch `_call_openai` / `_call_anthropic`
+    themselves, so forcing the stub on here costs them nothing.
+    """
+    monkeypatch.setenv("SHOULDBE_USE_STUB", "1")
+    for key in ("OPENAI_API_KEY", "ANTHROPIC_API_KEY", "LLM_API_KEY"):
+        monkeypatch.delenv(key, raising=False)
+
+
+@pytest.fixture(autouse=True)
 def no_unmocked_outbound_http(monkeypatch):
     """Exercise the real send path, but make an unmocked HTTP call a test failure."""
     monkeypatch.setenv("SHOULDBE_EMAIL_LIVE", "1")

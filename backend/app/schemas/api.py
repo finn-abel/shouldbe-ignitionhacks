@@ -9,6 +9,7 @@ from decimal import Decimal
 from pydantic import BaseModel, ConfigDict, Field, RootModel, field_validator, model_validator
 
 from app.schemas.invite import MAX_BUDGET_SCOPES
+from app.services.directory import MAX_DIRECTORY_ENTRIES
 from app.enums import BudgetScope, OutboxStatus, Status, Tier, Verdict
 
 
@@ -26,6 +27,10 @@ class MeetingAnalysis(BaseModel):
     duration_minutes: int
     attendee_count: int
     attendee_tiers: list[Tier]
+    # Positionally aligned with `attendee_tiers`. Not persisted on the meeting row itself —
+    # `MeetingAttendee` holds the durable per-seat record — but carried here so the write
+    # that creates those rows knows who each seat was.
+    attendee_emails: list[str] = Field(default_factory=list)
     organizer_email: str
     is_recurring: bool
     recurrence_freq: str | None
@@ -59,12 +64,16 @@ class MeetingAnalysis(BaseModel):
 
 
 class MeetingRead(MeetingAnalysis):
-    """A saved ledger row. The analysis, plus the two fields persistence assigns."""
+    """A saved ledger row. The analysis, plus the fields persistence assigns."""
 
     model_config = ConfigDict(from_attributes=True)
 
     id: int
     created_at: datetime
+    # How many seats were priced at the default tier because nobody had placed the
+    # address. Zero means this row is a figure; anything else means it is a floor, and
+    # the ledger says so rather than presenting a guess as a number.
+    unidentified_count: int = 0
 
 
 class SpendBucket(BaseModel):
@@ -203,6 +212,88 @@ class UserRead(BaseModel):
     email: str
     display_name: str
     is_guest: bool
+
+
+class PersonRead(BaseModel):
+    """One directory entry: a colleague and the tier their time is priced at."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    email: str
+    tier: Tier
+    display_name: str | None = None
+    # True for the acting user's own entry. The UI gives "your role" its own control —
+    # it is the one row a person can always answer, and the one that most often makes
+    # their own meetings priced correctly.
+    is_self: bool = False
+
+
+class PersonUpdate(BaseModel):
+    """Place one person at a tier. The address is the identity, so this is an upsert."""
+
+    email: str = Field(min_length=3, max_length=320)
+    tier: Tier
+    display_name: str | None = Field(default=None, max_length=255)
+
+    @field_validator("email")
+    @classmethod
+    def _readable_address(cls, value: str) -> str:
+        from app.services.directory import person_key
+
+        key = person_key(value)
+        if not key:
+            raise ValueError(f"{value!r} is not an email address.")
+        return key
+
+
+class PeopleUpdate(BaseModel):
+    """A whole directory edit in one request, the way rates and budgets are saved.
+
+    Bounded for the same reason `BudgetUpdate.budgets` is: one row is written per entry,
+    so an unbounded list is an unbounded write from a single request.
+    """
+
+    people: list[PersonUpdate] = Field(default_factory=list, max_length=MAX_DIRECTORY_ENTRIES)
+
+
+class UnidentifiedPerson(BaseModel):
+    """An address that has been in this user's meetings and nobody has placed yet.
+
+    `meeting_count` is what makes the worklist worth working: the address sitting in
+    eleven meetings is the one whose role is actually moving the ledger.
+    """
+
+    email: str
+    meeting_count: int
+
+
+class RepricingRead(BaseModel):
+    """What identifying people changed, in aggregate. Never a per-person figure."""
+
+    meetings_repriced: int = 0
+    seats_corrected: int = 0
+    cost_before: Decimal = Decimal("0.00")
+    cost_after: Decimal = Decimal("0.00")
+    cost_delta: Decimal = Decimal("0.00")
+
+
+class DirectoryRead(BaseModel):
+    """The whole People screen in one request: who is placed, and who still is not."""
+
+    self_email: str
+    # Null until the user has said what their own role is. Distinct from "they are an IC":
+    # a default that looks like an answer is how a ledger ends up quietly wrong.
+    me: PersonRead | None = None
+    people: list[PersonRead] = Field(default_factory=list)
+    unidentified: list[UnidentifiedPerson] = Field(default_factory=list)
+
+
+class DirectorySaved(BaseModel):
+    """A directory edit and the ledger correction it caused."""
+
+    directory: DirectoryRead
+    repricing: RepricingRead
 
 
 class InboundRouteRead(BaseModel):

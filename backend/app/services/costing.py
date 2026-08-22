@@ -83,6 +83,33 @@ def _resolve_tier(tier: Tier | str) -> Tier:
         raise ValueError(f"Unknown role tier {tier!r}. Expected one of: {known}.") from None
 
 
+def cost_from_rates(seat_rates: list[Decimal], duration_minutes: int) -> Decimal:
+    """Aggregate cost of one occurrence from the rate each seat is billed at.
+
+    The lower-level half of `meeting_cost`, split out for re-pricing: when one attendee is
+    identified after the fact, their seat takes a new rate and every other seat keeps the
+    one it was recorded at. Passing the rates directly is what makes that possible without
+    re-deriving the whole meeting from today's rate table.
+
+    Still aggregate-only in what it returns — a single pooled figure, never a breakdown.
+    """
+    if duration_minutes < 0:
+        raise ValueError(f"duration_minutes must not be negative, got {duration_minutes}.")
+
+    hourly_total = sum((Decimal(rate) for rate in seat_rates), Decimal(0))
+    hours = Decimal(billable_minutes(duration_minutes)) / MINUTES_PER_HOUR
+    return _to_money(hourly_total * hours)
+
+
+def rate_for(tier: Tier | str, tier_rates: dict[Tier, Decimal] | None = None) -> Decimal:
+    """The blended hourly rate one tier is billed at. Never an individual's pay."""
+    rates = DEFAULT_TIER_RATES if tier_rates is None else tier_rates
+    resolved = _resolve_tier(tier)
+    if resolved not in rates:
+        raise ValueError(f"No hourly rate configured for tier {resolved.value!r}.")
+    return Decimal(rates[resolved])
+
+
 def meeting_cost(
     attendee_tiers: list[Tier | str],
     duration_minutes: int,
@@ -97,17 +124,9 @@ def meeting_cost(
     if duration_minutes < 0:
         raise ValueError(f"duration_minutes must not be negative, got {duration_minutes}.")
 
-    rates = DEFAULT_TIER_RATES if tier_rates is None else tier_rates
-
-    hourly_total = Decimal(0)
-    for tier in attendee_tiers:
-        resolved = _resolve_tier(tier)
-        if resolved not in rates:
-            raise ValueError(f"No hourly rate configured for tier {resolved.value!r}.")
-        hourly_total += Decimal(rates[resolved])
-
-    hours = Decimal(billable_minutes(duration_minutes)) / MINUTES_PER_HOUR
-    return _to_money(hourly_total * hours)
+    return cost_from_rates(
+        [rate_for(tier, tier_rates) for tier in attendee_tiers], duration_minutes
+    )
 
 
 def annualized_cost(

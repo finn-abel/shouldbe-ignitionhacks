@@ -152,11 +152,16 @@ def parse_ics(ics_text: str, exclude_emails: tuple[str, ...] = ()) -> "ParsedInv
     event = min(events, key=lambda e: (e.begin is None, e.begin))
 
     ignored = {_billing_key(address.lower()) for address in exclude_emails if address}
-    attendees = [
+    # Sorted, because `event.attendees` is a *set*: the library gives no stable order, so
+    # the same invite parsed twice would seat the same people in different positions.
+    # Seats are now durable rows that a person is later matched to, and a room that
+    # reshuffles between a delivery and its redelivery is a room where "seat 3" means
+    # nothing. Alphabetical is arbitrary but it is the same arbitrary every time.
+    attendees = sorted(
         email
         for email in (_email_of(a) for a in event.attendees)
         if email and _billing_key(email) not in ignored
-    ]
+    )
     if len(attendees) > MAX_ATTENDEES:
         # Priced on the first MAX_ATTENDEES rather than refused: an invite this large is
         # either a mailing list or an attack, and both should land as a bounded row.
@@ -173,7 +178,12 @@ def parse_ics(ics_text: str, exclude_emails: tuple[str, ...] = ()) -> "ParsedInv
         description=(event.description or "").strip()[:MAX_DESCRIPTION_CHARS],
         start=event.begin.datetime if event.begin else None,
         duration_minutes=_duration_minutes(event),
+        # Every seat starts assumed at the default tier. The caller resolves them against
+        # the user's directory (`services.directory.seats_for`) before pricing — this
+        # adapter has no database and must not grow one. Keeping the addresses is what
+        # makes that resolution, and any later correction, possible at all.
         attendee_tiers=[DEFAULT_ATTENDEE_TIER] * len(attendees),
+        attendee_emails=attendees,
         organizer_email=organizer,
         is_recurring=recurrence is not None,
         recurrence_freq=recurrence,

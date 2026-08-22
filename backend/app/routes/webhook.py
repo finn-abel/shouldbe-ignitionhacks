@@ -16,7 +16,9 @@ from sqlalchemy.orm import Session
 from app.config import is_deployed
 from app.data.db import get_session
 from app.data.meetings import find_by_source_key, save_analysis
+from app.data.people import tier_map
 from app.data.tiers import get_tier_rates
+from app.services.directory import resolved_invite
 from app.services.email import compose_reply, drain_outbox_in_new_session
 from app.services.inbound_routing import (
     normalize_address,
@@ -142,7 +144,15 @@ def inbound_email(
             logger.info("Invite %s was already analyzed; not replying again.", source_key)
             return {"status": "duplicate", "meeting_id": already.id, "reply": "skipped"}
 
-    analysis = analyze(invite, get_tier_rates(session, owner.id))
+    # The whole point of the directory. An .ics carries addresses and no roles, so
+    # `parse_ics` hands back a room of assumed lowest-tier seats; resolving them here is
+    # what makes an emailed meeting with two directors in it cost what it actually cost.
+    # Anyone the owner has not placed stays assumed and shows up on their worklist.
+    known = tier_map(session, owner.id)
+    invite = resolved_invite(invite, known)
+
+    rates = get_tier_rates(session, owner.id)
+    analysis = analyze(invite, rates)
 
     # Rendered now, not at send time: `compose_reply` needs the `MeetingAnalysis`, which
     # only exists here, so the outbox stores finished text and the drain needs just the row.
@@ -160,6 +170,8 @@ def inbound_email(
             analysis,
             source_key,
             reply=(recipient, subject, body) if recipient else None,
+            tier_rates=rates,
+            known_people=known,
         )
     except IntegrityError:
         # A retry that arrived while the first delivery was still being scored. The

@@ -115,6 +115,27 @@ export function updateTierRates(rates) {
   return request('/api/tiers', { method: 'PUT', body: JSON.stringify(rates) });
 }
 
+// --- the people directory ---
+
+/** Who is placed at which role tier, plus the addresses nobody has placed yet. */
+export function getDirectory() {
+  return request('/api/people');
+}
+
+/**
+ * Place people at role tiers. Returns `{directory, repricing}` — saving a role and
+ * correcting the meetings that guessed at that person are the same request, so the
+ * response says how much the ledger moved.
+ */
+export function saveDirectory(people) {
+  return request('/api/people', { method: 'PUT', body: JSON.stringify({ people }) });
+}
+
+/** Forget a directory entry. Meetings keep the cost they were priced at. */
+export function forgetPerson(id) {
+  return request(`/api/people/${id}`, { method: 'DELETE' });
+}
+
 /** Swap a flagged meeting for the drafted email (doc 2 §5.4). */
 export function convertMeeting(id) {
   return request(`/api/meetings/${id}`, {

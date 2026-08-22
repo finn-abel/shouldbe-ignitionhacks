@@ -27,8 +27,20 @@ DEFAULT_LLM_PROVIDER = "openai"
 DEFAULT_OPENAI_MODEL = "gpt-5-nano"
 DEFAULT_ANTHROPIC_MODEL = "claude-opus-5"
 
-# Enough room for the reasoning plus a drafted email, without paying for giant outputs.
-DEFAULT_LLM_MAX_TOKENS = 1200
+# The budget for one scoring call — and on a reasoning model this is *not* just the JSON
+# that comes back.
+#
+# `max_output_tokens` on OpenAI's Responses API covers the model's internal reasoning
+# tokens as well as the visible answer, and gpt-5-nano spends reasoning tokens before it
+# emits a single character. At 1200 the reasoning routinely consumed the whole allowance
+# and the call came back `incomplete` with empty output, so every real-provider analysis
+# failed to a neutral keep verdict. The old value was sized as if the budget were only
+# the visible output; it never was.
+#
+# 4000 leaves room for the rubric, the reasoning sentence, and a drafted email with the
+# reasoning half taking its share first. `LLM_EFFORT` below is the other half of the fix:
+# capping how much of this the model may spend thinking.
+DEFAULT_LLM_MAX_TOKENS = 4000
 
 # The title and agenda of an emailed invite are written by whoever sent it, and the model's
 # answer is not just displayed — `alternative_email` is sent to the organizer from a domain
@@ -42,9 +54,13 @@ DATA_CLOSE = "</meeting_data>"
 MAX_PROMPT_TITLE_CHARS = 300
 MAX_PROMPT_DESCRIPTION_CHARS = 2_000
 
-# Anthropic-only effort setting. This is a short classification with a short piece of
-# writing attached, not a research task.
-LLM_EFFORT = "medium"
+# How much of the token budget the model may spend thinking before it answers. This is a
+# short classification with a short piece of writing attached, not a research task, and on
+# both providers reasoning tokens are drawn from the same allowance as the answer — so an
+# unconstrained effort setting is what starved the visible output at the old limit.
+#
+# Sent to OpenAI as `reasoning.effort` and to Anthropic as `output_config.effort`.
+LLM_EFFORT = "low"
 
 # Score bands. The rubric deliberately *defends* necessary meetings (doc 1 §70), so an
 # honestly ambiguous meeting keeps its slot rather than being flagged.
@@ -466,11 +482,21 @@ def _failure_text(failure: Exception) -> str:
 
 
 def _token_limit_message(provider: str | None) -> str:
+    """Why the model stopped early, and the thing that actually fixes it.
+
+    This used to say "increase LLM_MAX_TOKENS or shorten the meeting details", and the
+    second half is a dead end: on a reasoning model the budget is spent on thinking before
+    any of it reaches the answer, so a shorter agenda changes nothing. Naming the real
+    cause is the difference between a one-line env change and an afternoon spent trimming
+    invite text.
+    """
     return (
         f"The AI ran out of output tokens before it finished scoring this meeting "
         f"({_provider_name(provider)}, model {_model(provider) if provider else 'unknown'}, "
-        f"LLM_MAX_TOKENS={_max_tokens()}). ShouldBe recorded a neutral keep verdict; "
-        "increase LLM_MAX_TOKENS or shorten the meeting details, then re-run the analysis."
+        f"LLM_MAX_TOKENS={_max_tokens()}). On a reasoning model that budget covers the "
+        "model's own reasoning as well as its answer, so the usual cause is a limit set "
+        "for the answer alone. ShouldBe recorded a neutral keep verdict; raise "
+        "LLM_MAX_TOKENS and re-run the analysis."
     )
 
 
@@ -598,6 +624,11 @@ def _call_openai(prompt: str, key: str) -> str:
         model=_model("openai"),
         input=prompt,
         max_output_tokens=_max_tokens(),
+        # Reasoning tokens come out of `max_output_tokens`, so leaving effort at the
+        # model default let gpt-5-nano think its way through the entire budget and return
+        # `incomplete` with nothing in it. Capping the thinking is what leaves room for
+        # the answer.
+        reasoning={"effort": LLM_EFFORT},
         store=False,
         text={
             "format": {
