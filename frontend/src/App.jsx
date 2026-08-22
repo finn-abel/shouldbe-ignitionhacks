@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import AnalysisResult from './components/AnalysisResult.jsx';
 import AnalyzeForm from './components/AnalyzeForm.jsx';
 import Colophon from './components/Colophon.jsx';
+import Configuration from './components/Configuration.jsx';
 import Dashboard from './components/Dashboard.jsx';
 import Entry from './components/Entry.jsx';
 import Settings from './components/Settings.jsx';
@@ -11,6 +12,7 @@ import './styles/app.css';
 const PRIMARY_VIEWS = [
   { key: 'dashboard', label: 'Dashboard' },
   { key: 'analyze', label: 'Analyze' },
+  { key: 'configuration', label: 'Configuration' },
 ];
 
 const THEME_KEY = 'shouldbe-theme';
@@ -223,6 +225,17 @@ export default function App() {
                     </div>
                   </section>
                 </section>
+                <section
+                  className="screens__page"
+                  aria-hidden={view !== 'configuration'}
+                  inert={view !== 'configuration' ? true : undefined}
+                >
+                  <div className="stage">
+                    <Configuration
+                      onSaved={() => setLedgerVersion((version) => version + 1)}
+                    />
+                  </div>
+                </section>
               </div>
             </div>
           </>
@@ -231,7 +244,6 @@ export default function App() {
             <Settings
               theme={theme}
               onThemeChange={setTheme}
-              onSaved={() => setLedgerVersion((version) => version + 1)}
             />
           </div>
         )}

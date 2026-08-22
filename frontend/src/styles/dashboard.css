@@ -1499,6 +1499,77 @@
   font-size: var(--text-sm);
 }
 
+.people-list {
+  display: grid;
+  grid-template-columns: 0.65rem minmax(0, 1fr);
+  gap: var(--gap-hair);
+  min-height: 0;
+  height: clamp(24rem, 56vh, 38rem);
+  padding: var(--gap-tight);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-card);
+  background: var(--paper-sunken);
+  overflow: hidden;
+}
+
+.people-list__scrollbar {
+  position: relative;
+  min-height: 0;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: var(--paper-raised);
+  cursor: grab;
+  touch-action: none;
+}
+
+.people-list__scrollbar:active {
+  cursor: grabbing;
+}
+
+.people-list__thumb {
+  position: absolute;
+  inset-inline: 0.12rem;
+  top: var(--people-scroll-top);
+  height: var(--people-scroll-height);
+  min-height: 2.4rem;
+  border-radius: 999px;
+  background: var(--rule-strong);
+  transition: background var(--duration) var(--ease), opacity var(--duration) var(--ease);
+}
+
+.people-list__scrollbar:hover .people-list__thumb {
+  background: var(--ink-faint);
+}
+
+.people-list__viewport {
+  min-width: 0;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.people-list__viewport::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+.people-list__viewport:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 0.2rem;
+}
+
+.people-list__inner {
+  display: grid;
+  gap: var(--gap-tight);
+}
+
+.people-list .people-heading:first-child {
+  margin-top: 0;
+}
+
 .people-rows {
   display: grid;
   gap: 1px;

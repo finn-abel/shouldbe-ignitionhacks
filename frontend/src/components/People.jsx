@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { forgetPerson, getDirectory, saveDirectory } from '../api/client.js';
 import { ASSUMED_TIER, TIERS, tierLabel } from '../lib/tiers.js';
 import { formatMoneyExact } from '../lib/format.js';
@@ -23,7 +23,7 @@ const UNASSIGNED = '';
  * Saving is one request: placing a person and correcting the meetings that guessed at
  * them are the same act, so the panel reports what the ledger did in response.
  *
- * Rendered inside the Settings form, so every control is `type="button"` — a nested
+ * Rendered inside the Configuration form, so every control is `type="button"` — a nested
  * <form> is invalid HTML and would submit the rates form instead.
  */
 export default function People({ onRepriced }) {
@@ -31,11 +31,35 @@ export default function People({ onRepriced }) {
   // Staged edits, keyed by address. Kept separate from `directory` so the panel always
   // shows what is saved next to what is about to change.
   const [staged, setStaged] = useState({});
+  const [peopleScrollbar, setPeopleScrollbar] = useState({
+    top: 0,
+    height: 1,
+    visible: false,
+  });
   const [newEmail, setNewEmail] = useState('');
   const [newTier, setNewTier] = useState(ASSUMED_TIER);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState(null);
   const [error, setError] = useState(null);
+  const peopleListRef = useRef(null);
+
+  const syncPeopleScrollbar = () => {
+    const list = peopleListRef.current;
+    if (!list) return;
+
+    const maxScroll = Math.max(0, list.scrollHeight - list.clientHeight);
+    const visible = maxScroll > 1;
+    const height = visible ? Math.max(0.12, list.clientHeight / list.scrollHeight) : 1;
+    const top = visible ? (list.scrollTop / maxScroll) * (1 - height) : 0;
+
+    setPeopleScrollbar((prev) =>
+      prev.visible === visible &&
+      Math.abs(prev.height - height) < 0.001 &&
+      Math.abs(prev.top - top) < 0.001
+        ? prev
+        : { visible, height, top },
+    );
+  };
 
   const load = async () => {
     try {
@@ -48,6 +72,15 @@ export default function People({ onRepriced }) {
   useEffect(() => {
     load();
   }, []);
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(syncPeopleScrollbar);
+    window.addEventListener('resize', syncPeopleScrollbar);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener('resize', syncPeopleScrollbar);
+    };
+  });
 
   if (error && !directory) {
     return <p className="notice notice--error" role="alert">{error}</p>;
@@ -143,6 +176,44 @@ export default function People({ onRepriced }) {
   const known = new Set(people.map((person) => person.email));
   const seen = new Set(unidentified.map((row) => row.email));
   const added = pending.filter(([email]) => !known.has(email) && !seen.has(email));
+  const hasPeopleList = unidentified.length > 0 || people.length > 0 || added.length > 0;
+
+  const scrollPeopleList = (event) => {
+    const list = peopleListRef.current;
+    if (!list) return;
+    if (list.scrollHeight <= list.clientHeight) return;
+    event.preventDefault();
+    event.stopPropagation();
+    list.scrollTop += event.deltaY;
+    syncPeopleScrollbar();
+  };
+
+  const jumpPeopleList = (clientY, track) => {
+    const list = peopleListRef.current;
+    if (!list) return;
+
+    const maxScroll = Math.max(0, list.scrollHeight - list.clientHeight);
+    if (!maxScroll) return;
+
+    const ratio = Math.min(1, Math.max(0, (clientY - track.top) / track.height));
+    list.scrollTop = ratio * maxScroll;
+    syncPeopleScrollbar();
+  };
+
+  const dragPeopleScrollbar = (event) => {
+    const track = event.currentTarget.getBoundingClientRect();
+    event.preventDefault();
+    jumpPeopleList(event.clientY, track);
+
+    const move = (moveEvent) => jumpPeopleList(moveEvent.clientY, track);
+    const stop = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', stop);
+    };
+
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', stop);
+  };
 
   return (
     <section className="panel panel--surface settings__people">
@@ -171,71 +242,101 @@ export default function People({ onRepriced }) {
         </span>
       </div>
 
-      {unidentified.length > 0 && (
-        <>
-          <p className="people-heading">
-            <span className="badge badge--leak">Unidentified</span>
-            These addresses are in your ledger with no role, so their time is billed at the
-            floor. Naming them corrects every meeting that guessed.
-          </p>
-          <div className="people-rows">
-            {unidentified.map(({ email, meeting_count: count }) => (
-              <div className="people-row people-row--unknown" key={email}>
-                <div className="people-row__who">
-                  <span className="people-row__email">{email}</span>
-                  <span className="people-row__meta figure">
-                    in {count} meeting{count === 1 ? '' : 's'}
-                  </span>
-                </div>
-                {roleSelect(email, undefined, `Role tier for ${email}`)}
-                <span className="people-row__note">
-                  billed {tierLabel(ASSUMED_TIER)}
-                </span>
-              </div>
-            ))}
+      {hasPeopleList && (
+        <div className="people-list">
+          <div
+            className="people-list__scrollbar"
+            aria-hidden="true"
+            onPointerDown={dragPeopleScrollbar}
+          >
+            <span
+              className="people-list__thumb"
+              style={{
+                '--people-scroll-top': `${peopleScrollbar.top * 100}%`,
+                '--people-scroll-height': `${peopleScrollbar.height * 100}%`,
+                opacity: peopleScrollbar.visible ? 1 : 0.42,
+              }}
+            />
           </div>
-        </>
-      )}
+          <div
+            className="people-list__viewport"
+            ref={peopleListRef}
+            role="region"
+            aria-label="People role lists"
+            tabIndex={0}
+            onWheel={scrollPeopleList}
+            onScroll={syncPeopleScrollbar}
+          >
+            <div className="people-list__inner">
+              {unidentified.length > 0 && (
+                <>
+                  <p className="people-heading">
+                    <span className="badge badge--leak">Unidentified</span>
+                    These addresses are in your ledger with no role, so their time is billed at the
+                    floor. Naming them corrects every meeting that guessed.
+                  </p>
+                  <div className="people-rows">
+                    {unidentified.map(({ email, meeting_count: count }) => (
+                      <div className="people-row people-row--unknown" key={email}>
+                        <div className="people-row__who">
+                          <span className="people-row__email">{email}</span>
+                          <span className="people-row__meta figure">
+                            in {count} meeting{count === 1 ? '' : 's'}
+                          </span>
+                        </div>
+                        {roleSelect(email, undefined, `Role tier for ${email}`)}
+                        <span className="people-row__note">
+                          billed {tierLabel(ASSUMED_TIER)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
 
-      {(people.length > 0 || added.length > 0) && (
-        <>
-          <p className="people-heading">
-            <span className="badge badge--defend">Placed</span>
-            Priced at their tier from here on. Changing a role does not re-price meetings
-            that already knew it — the ledger records what happened.
-          </p>
-          <div className="people-rows">
-            {people.map((person) => (
-              <div className="people-row" key={person.email}>
-                <div className="people-row__who">
-                  <span className="people-row__email">{person.email}</span>
-                  {person.is_self && <span className="people-row__meta">you</span>}
-                  {person.display_name && (
-                    <span className="people-row__meta">{person.display_name}</span>
-                  )}
-                </div>
-                {roleSelect(person.email, person.tier, `Role tier for ${person.email}`)}
-                <button
-                  type="button"
-                  className="people-row__forget"
-                  onClick={() => forget(person)}
-                >
-                  Remove
-                </button>
-              </div>
-            ))}
-            {added.map(([email, tier]) => (
-              <div className="people-row people-row--pending" key={email}>
-                <div className="people-row__who">
-                  <span className="people-row__email">{email}</span>
-                  <span className="people-row__meta">not saved yet</span>
-                </div>
-                {roleSelect(email, tier, `Role tier for ${email}`)}
-                <span className="people-row__note">pending</span>
-              </div>
-            ))}
+              {(people.length > 0 || added.length > 0) && (
+                <>
+                  <p className="people-heading">
+                    <span className="badge badge--defend">Placed</span>
+                    Priced at their tier from here on. Changing a role does not re-price meetings
+                    that already knew it — the ledger records what happened.
+                  </p>
+                  <div className="people-rows">
+                    {people.map((person) => (
+                      <div className="people-row" key={person.email}>
+                        <div className="people-row__who">
+                          <span className="people-row__email">{person.email}</span>
+                          {person.is_self && <span className="people-row__meta">you</span>}
+                          {person.display_name && (
+                            <span className="people-row__meta">{person.display_name}</span>
+                          )}
+                        </div>
+                        {roleSelect(person.email, person.tier, `Role tier for ${person.email}`)}
+                        <button
+                          type="button"
+                          className="people-row__forget"
+                          onClick={() => forget(person)}
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ))}
+                    {added.map(([email, tier]) => (
+                      <div className="people-row people-row--pending" key={email}>
+                        <div className="people-row__who">
+                          <span className="people-row__email">{email}</span>
+                          <span className="people-row__meta">not saved yet</span>
+                        </div>
+                        {roleSelect(email, tier, `Role tier for ${email}`)}
+                        <span className="people-row__note">pending</span>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
           </div>
-        </>
+        </div>
       )}
 
       <div className="people-add">

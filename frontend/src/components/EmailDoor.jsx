@@ -11,7 +11,7 @@ import { getInboundRoute, setInboundDomain } from '../api/client.js';
  * - Claiming the company domain is the zero-effort one — after it, a colleague who has
  *   never opened ShouldBe is attributed correctly just by inviting the plain address.
  *
- * Rendered inside the Settings form, so every control here is `type="button"`: a nested
+ * Rendered inside the Configuration form, so every control here is `type="button"`: a nested
  * <form> is invalid HTML and would submit the rates form instead.
  */
 export default function EmailDoor() {
