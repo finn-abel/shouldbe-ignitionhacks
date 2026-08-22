@@ -1,0 +1,128 @@
+"""The four dollar concepts and the burn-rate series (doc 2 §6).
+
+Pure functions over a user's ledger — no DB, no HTTP. They take `MeetingRead` rather than
+ORM rows so the money logic, like the cost math, can be tested without a database.
+
+**Converted meetings are not spend.** Doc 2 §6's derivation column shows total spend as a
+plain sum, but its prose is explicit that "spend is real money that happened" and that a
+`converted` meeting "contributes to reclaimed savings, not spend" — a meeting swapped for
+an email never happened, so its cost was never paid. Reading it the other way would leave
+a converted meeting counted as spend and as avoided money at the same time, and would mean
+converting meetings never moves the over-budget headline the product exists to move.
+
+The reading gives a clean invariant the dashboard can rely on:
+
+    total spend == necessary spend + avoidable spend
+"""
+
+from collections import defaultdict
+from datetime import date, datetime, timedelta, timezone
+from decimal import ROUND_HALF_UP, Decimal
+from typing import Iterable, Literal
+
+from app.enums import Status, Verdict
+from app.schemas.api import BudgetComparison, MeetingRead, SpendBucket
+
+CENTS = Decimal("0.01")
+ZERO = Decimal("0.00")
+
+Bucket = Literal["day", "week"]
+
+
+def _money(value: Decimal) -> Decimal:
+    return Decimal(value).quantize(CENTS, rounding=ROUND_HALF_UP)
+
+
+def _happened(meeting: MeetingRead) -> bool:
+    """Whether the meeting was actually held, and so actually cost money."""
+    return meeting.status is not Status.CONVERTED
+
+
+def total_spend(meetings: Iterable[MeetingRead]) -> Decimal:
+    """All money spent on meetings that happened, whatever the verdict — the burn rate."""
+    return _money(sum((m.cost for m in meetings if _happened(m)), ZERO))
+
+
+def necessary_spend(meetings: Iterable[MeetingRead]) -> Decimal:
+    """Spend on meetings judged worth keeping."""
+    return _money(
+        sum((m.cost for m in meetings if _happened(m) and m.verdict is Verdict.KEEP), ZERO)
+    )
+
+
+def avoidable_spend(meetings: Iterable[MeetingRead]) -> Decimal:
+    """Spend on meetings that could have been async but were held anyway."""
+    return _money(
+        sum((m.cost for m in meetings if _happened(m) and m.verdict is Verdict.EMAIL), ZERO)
+    )
+
+
+def reclaimed_savings(meetings: Iterable[MeetingRead]) -> Decimal:
+    """Money *not* spent because a meeting was converted to an email — a counterfactual."""
+    return _money(
+        sum((m.reclaimed_savings for m in meetings if m.status is Status.CONVERTED), ZERO)
+    )
+
+
+def _bucket_start(moment: datetime, bucket: Bucket) -> date:
+    day = moment.date()
+    if bucket == "week":
+        return day - timedelta(days=day.weekday())  # the Monday of that week
+    return day
+
+
+def spend_over_time(
+    meetings: Iterable[MeetingRead],
+    bucket: Bucket = "day",
+) -> list[SpendBucket]:
+    """Spend grouped by day or week of `created_at`, oldest first.
+
+    Only periods that actually contain meetings are returned; the chart decides how to
+    render the gaps between them.
+    """
+    if bucket not in ("day", "week"):
+        raise ValueError(f"bucket must be 'day' or 'week', got {bucket!r}.")
+
+    totals: dict[date, Decimal] = defaultdict(lambda: ZERO)
+    for meeting in meetings:
+        if _happened(meeting):
+            totals[_bucket_start(meeting.created_at, bucket)] += meeting.cost
+
+    return [SpendBucket(period=period, amount=_money(totals[period])) for period in sorted(totals)]
+
+
+def budget_comparison(
+    meetings: Iterable[MeetingRead],
+    monthly_amount: Decimal | None,
+    now: datetime | None = None,
+) -> BudgetComparison:
+    """This calendar month's spend against the monthly budget (doc 2 §6)."""
+    moment = now or datetime.now(timezone.utc)
+
+    month_spend = total_spend(
+        m for m in meetings
+        if (m.created_at.year, m.created_at.month) == (moment.year, moment.month)
+    )
+
+    if monthly_amount is None:
+        return BudgetComparison(
+            monthly_amount=None,
+            month_spend=month_spend,
+            difference=None,
+            percent_over=None,
+            is_over_budget=False,
+        )
+
+    budget = Decimal(monthly_amount)
+    difference = _money(month_spend - budget)
+
+    # A zero budget cannot be exceeded by a percentage; report the dollars instead.
+    percent_over = float(difference / budget * 100) if budget > 0 else None
+
+    return BudgetComparison(
+        monthly_amount=_money(budget),
+        month_spend=month_spend,
+        difference=difference,
+        percent_over=percent_over,
+        is_over_budget=month_spend > budget,
+    )
