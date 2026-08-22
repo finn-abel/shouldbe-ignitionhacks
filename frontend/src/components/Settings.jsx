@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { getBudget, getTierRates, updateBudget, updateTierRates } from '../api/client.js';
+import EmailDoor from './EmailDoor.jsx';
 import { formatMoney, formatMoneyExact } from '../lib/format.js';
 
 const TIERS = [
@@ -282,6 +283,8 @@ export default function Settings({ theme, onThemeChange, onSaved }) {
           </p>
         </div>
       </section>
+
+      <EmailDoor />
 
       {error && <p className="notice notice--error" role="alert">{error}</p>}
 

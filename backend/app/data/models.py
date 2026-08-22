@@ -23,7 +23,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import TypeDecorator
 
 from app.data.db import Base
-from app.enums import Status, Tier, Verdict
+from app.enums import OutboxStatus, Status, Tier, Verdict
 
 class UtcDateTime(TypeDecorator):
     """Timestamps that are UTC-aware on the way in and on the way out, on any dialect.
@@ -182,3 +182,77 @@ class Meeting(Base):
     created_at: Mapped[datetime] = mapped_column(UtcDateTime, nullable=False, default=_utcnow, index=True)
 
     user: Mapped[User] = relationship(back_populates="meetings")
+
+
+class InboundRoute(Base):
+    """How an emailed invite finds its owner (doc 2 §5.2's "known edge", closed).
+
+    Door A used to attribute every invite to the shared guest, because an inbound email
+    carries no session. This row is what an invite is matched against instead. One per
+    user, created lazily so an existing database gains routing without a re-seed.
+
+    Two independent handles, because they fail in opposite directions:
+
+    - `token` is explicit and unambiguous — it rides in the address the organizer invited
+      (`ledger+ab12cd@...`), so it works no matter which account sent the invite.
+    - `domain` is implicit and zero-effort — anyone at the company gets attributed without
+      knowing ShouldBe exists. It is nullable, unique, and MUST NOT be a public mailbox
+      provider: claiming `gmail.com` would capture every gmail organizer's invites.
+      `app.services.inbound_routing` enforces that; the column only enforces uniqueness.
+    """
+
+    __tablename__ = "inbound_routes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id"), nullable=False, unique=True, index=True
+    )
+    token: Mapped[str] = mapped_column(String(16), nullable=False, unique=True, index=True)
+    domain: Mapped[str | None] = mapped_column(String(255), nullable=True, unique=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime, nullable=False, default=_utcnow)
+
+    user: Mapped[User] = relationship()
+
+
+class EmailOutbox(Base):
+    """One outbound reply, durable (the transactional outbox pattern).
+
+    The reply used to be a bare `BackgroundTasks` call: if Postmark was unreachable the
+    send was logged and lost, and because a redelivered invite hits the idempotency guard
+    and never re-sends, nothing would ever try again. So the reply is now a row, written
+    in the *same commit* as its `Meeting` — the meeting and its pending reply either both
+    exist or neither does.
+
+    The body is rendered at enqueue time rather than at send time. `compose_reply` needs a
+    `MeetingAnalysis`, which only exists in the request that scored the invite; storing the
+    finished text means the drain needs nothing but this row.
+
+    This is also what makes a brand-new Postmark account survivable. Until Postmark
+    manually approves an account it refuses any recipient outside your own verified
+    domains — so those replies simply stay QUEUED and send themselves once approval lands.
+    """
+
+    __tablename__ = "email_outbox"
+    __table_args__ = (
+        # At most one reply per meeting, for the same reason `uq_meeting_source_per_user`
+        # exists: Postmark redelivers an inbound message up to six times, and the database
+        # rather than the handler is what makes a repeat harmless.
+        UniqueConstraint("meeting_id", name="uq_outbox_per_meeting"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    meeting_id: Mapped[int] = mapped_column(ForeignKey("meetings.id"), nullable=False)
+
+    to_email: Mapped[str] = mapped_column(String(320), nullable=False)
+    subject: Mapped[str] = mapped_column(String(512), nullable=False)
+    text_body: Mapped[str] = mapped_column(Text, nullable=False)
+
+    status: Mapped[OutboxStatus] = _enum_column(
+        OutboxStatus, nullable=False, default=OutboxStatus.QUEUED, index=True
+    )
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime, nullable=False, default=_utcnow, index=True)
+    sent_at: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True)
+
+    meeting: Mapped[Meeting] = relationship()

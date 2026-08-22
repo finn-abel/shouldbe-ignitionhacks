@@ -98,9 +98,20 @@ and reasoning; it does not get to choose the final score or verdict.
 
 ## Door A — invite ShouldBe to a meeting
 
-Set `POSTMARK_TOKEN`, `POSTMARK_FROM`, `SHOULDBE_INBOX` and `POSTMARK_WEBHOOK_SECRET`, then point
-the Postmark inbound stream at `POST /webhook/inbound-email?token=<secret>`. Without Postmark
-configured the webhook still parses, scores and records the invite — it just skips the reply.
+Invites are **received** by Postmark (an MX on `invite.<domain>` → `inbound.postmarkapp.com`,
+which POSTs the parsed `.ics` to `/webhook/inbound-email?token=<secret>`). Replies are **sent**
+by Resend, which can reach any recipient once the domain is verified in DNS. Full setup,
+including the DNS records, is in `SETUP.local.md` §6.
+
+Each user gets a plus-addressed invite address (`ledger+ab12cd@…`, shown in Settings). An
+invite is attributed by routing token, then organizer address, then claimed company domain,
+then the shared guest — so an emailed invite lands on the right ledger rather than always on
+the demo one.
+
+The reply is not sent inline. It is written to an `email_outbox` row in the same commit as the
+meeting and drained afterwards, so a failed send is retried rather than lost. With nothing
+configured the webhook still parses, scores and records the invite, and the reply waits in the
+outbox until sending works. `GET /api/outbox` shows the queue.
 
 To exercise the same path from a saved `.ics` with no email at all:
 

@@ -8,7 +8,7 @@ from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, Field, RootModel, field_validator
 
-from app.enums import Status, Tier, Verdict
+from app.enums import OutboxStatus, Status, Tier, Verdict
 
 
 class MeetingAnalysis(BaseModel):
@@ -147,3 +147,38 @@ class UserRead(BaseModel):
     email: str
     display_name: str
     is_guest: bool
+
+
+class InboundRouteRead(BaseModel):
+    """The user's email door: where to invite ShouldBe from, and what it answers to."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    invite_address: str
+    token: str
+    domain: str | None = None
+    # False when SHOULDBE_INBOX is unset, so the UI can say "email is not set up yet"
+    # instead of showing a plausible address that silently goes nowhere.
+    email_configured: bool
+
+
+class InboundRouteUpdate(BaseModel):
+    """Claim a company domain, or clear it with null."""
+
+    domain: str | None = Field(default=None, max_length=255)
+
+
+class OutboxRead(BaseModel):
+    """One queued or delivered reply — what `GET /api/outbox` returns."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    meeting_id: int
+    to_email: str
+    subject: str
+    status: OutboxStatus
+    attempts: int
+    last_error: str | None = None
+    created_at: datetime
+    sent_at: datetime | None = None

@@ -68,9 +68,20 @@ The rest of `.env` is for deployment and can stay empty.
 | `DATABASE_URL` | `sqlite:///./shouldbe.db` | Pointing at Postgres |
 | `VITE_API_BASE_URL` *(frontend)* | `http://localhost:8000` | The API moves |
 
-Everything left blank — `GOOGLE_*`, `POSTMARK_*` — degrades gracefully. Google sign-in
-returns a clear "not configured" message and guest entry still works; the inbound webhook
-still parses and records invites, it just skips the reply.
+Everything left blank — `GOOGLE_*`, `POSTMARK_*`, `RESEND_*` — degrades gracefully. Google
+sign-in returns a clear "not configured" message and guest entry still works; the inbound
+webhook still parses and records invites, and the reply waits in the outbox rather than
+being lost.
+
+Postmark receives invites; Resend sends replies. They are independent — one can be broken
+without touching the other.
+
+If a reply did not arrive, `GET /api/outbox` says why. A row at `queued` with a `last_error`
+is recoverable — unconfigured provider, unverified domain, rate limit, network — and will be
+retried until it sends. A row at `failed` never will; only a malformed recipient gets there.
+
+⚠️ Environment is read at process start. After editing `.env`, fully restart the backend —
+`--reload` watches code, not variables.
 
 ---
 
@@ -79,7 +90,7 @@ still parses and records invites, it just skips the reply.
 ```bash
 cd backend && source venv/bin/activate
 
-pytest -q                                     # 169 tests, ~1s
+pytest -q                                     # 222 tests, ~1s
 python -m app.seed                            # reset the guest's numbers before a demo
 python -m app.services.ics_adapter file.ics   # score a saved .ics, no email needed
 python spike_llm.py                           # one real LLM call, needs LLM_API_KEY

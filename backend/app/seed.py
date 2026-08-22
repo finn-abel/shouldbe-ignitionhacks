@@ -11,12 +11,13 @@ the seeded costs, verdicts and reasoning are internally consistent with the live
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
-from sqlalchemy import delete
+from sqlalchemy import delete, select
 
 from app.data.db import SessionLocal, init_db
 from app.data.meetings import save_analysis
-from app.data.models import Meeting
+from app.data.models import EmailOutbox, Meeting
 from app.data.tiers import get_tier_rates
+from app.data.inbound_routes import set_domain
 from app.data.users import get_or_create_guest
 from app.enums import Status, Tier
 from app.schemas.invite import ParsedInvite
@@ -28,6 +29,11 @@ from app.services.pipeline import analyze
 GUEST_BUDGET = Decimal("4021.86")
 
 ORGANIZER = "ops@northwind.example"
+
+# The guest owns the demo company's domain, so a demo invite sent from any northwind
+# address lands on the seeded ledger rather than falling through to the guest by accident.
+# It also means the domain-claim feature is visibly exercised on a fresh database.
+GUEST_DOMAIN = "northwind.example"
 
 # (invite, days ago, final status). Titles are chosen so the scoring rubric reaches the
 # intended verdict on its own — nothing here overrides the engine.
@@ -168,9 +174,15 @@ def seed():
     with SessionLocal() as session:
         guest = get_or_create_guest(session)
 
+        # Outbox rows reference meetings, so they go first — otherwise re-seeding a
+        # database that has taken real invites trips the foreign key.
+        stale = select(Meeting.id).where(Meeting.user_id == guest.id)
+        session.execute(delete(EmailOutbox).where(EmailOutbox.meeting_id.in_(stale)))
         session.execute(delete(Meeting).where(Meeting.user_id == guest.id))
         guest.budget.monthly_amount = GUEST_BUDGET
         session.commit()
+
+        set_domain(session, guest.id, GUEST_DOMAIN)
 
         rates = get_tier_rates(session, guest.id)
 

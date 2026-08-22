@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.data.models import Meeting
+from app.data.outbox import enqueue_with_meeting
 from app.enums import Status, Verdict
 from app.schemas.api import MeetingAnalysis
 from app.services.money import reclaimed_by_converting
@@ -19,11 +20,17 @@ def save_analysis(
     user_id: int,
     analysis: MeetingAnalysis,
     source_key: str | None = None,
+    reply: tuple[str, str, str] | None = None,
 ) -> Meeting:
     """Write one analysis to the ledger as a costed transaction.
 
     `source_key` identifies the invite a meeting came from, so a redelivered inbound
     email cannot land twice. It is None for the manual form, which has no such notion.
+
+    `reply` is an optional `(to_email, subject, text_body)` for Door A, queued in this
+    same commit. Committing it separately would mean a meeting could be on the books with
+    its reply lost in between — which is the exact failure the outbox exists to remove. If
+    the unique constraint rejects the meeting on a redelivery, the reply rolls back with it.
     """
     meeting = Meeting(
         user_id=user_id,
@@ -48,6 +55,11 @@ def save_analysis(
         reclaimed_savings=analysis.reclaimed_savings,
     )
     session.add(meeting)
+
+    if reply is not None:
+        to_email, subject, text_body = reply
+        enqueue_with_meeting(session, meeting, to_email, subject, text_body)
+
     session.commit()
     session.refresh(meeting)
     return meeting

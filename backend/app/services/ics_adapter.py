@@ -105,6 +105,18 @@ def _email_of(participant) -> str:
     return email.replace("mailto:", "").strip().lower()
 
 
+def _billing_key(email: str) -> str:
+    """`ledger+ab12cd@host` -> `ledger@host`, for comparing against the ignore list.
+
+    ShouldBe's inbox is invited plus-addressed so the tag can carry a routing token. Both
+    sides of the exclusion check are reduced to the base address, otherwise the tag makes
+    the comparison miss and ShouldBe gets billed as an attendee on its own invite.
+    """
+    local, _, host = email.partition("@")
+    local = local.partition("+")[0]
+    return f"{local}@{host}" if local and host else email
+
+
 def parse_ics(ics_text: str, exclude_emails: tuple[str, ...] = ()) -> "ParsedInvite":
     """One .ics event as a `ParsedInvite`.
 
@@ -126,9 +138,11 @@ def parse_ics(ics_text: str, exclude_emails: tuple[str, ...] = ()) -> "ParsedInv
     # A METHOD:REQUEST invite carries one event; take the earliest if it carries more.
     event = min(events, key=lambda e: (e.begin is None, e.begin))
 
-    ignored = {address.lower() for address in exclude_emails if address}
+    ignored = {_billing_key(address.lower()) for address in exclude_emails if address}
     attendees = [
-        email for email in (_email_of(a) for a in event.attendees) if email and email not in ignored
+        email
+        for email in (_email_of(a) for a in event.attendees)
+        if email and _billing_key(email) not in ignored
     ]
 
     organizer = _email_of(event.organizer) if event.organizer else ""

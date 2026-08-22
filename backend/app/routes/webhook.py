@@ -14,8 +14,8 @@ from sqlalchemy.orm import Session
 from app.data.db import get_session
 from app.data.meetings import find_by_source_key, save_analysis
 from app.data.tiers import get_tier_rates
-from app.data.users import get_or_create_guest
-from app.services.email import send_reply
+from app.services.email import compose_reply, drain_outbox_in_new_session
+from app.services.inbound_routing import normalize_address, resolve_owner, strip_subaddress
 from app.services.ics_adapter import (
     NoInviteFound,
     find_ics_text,
@@ -57,13 +57,22 @@ def _verify_caller(request: Request) -> None:
 
 
 def _shouldbe_addresses(payload: dict) -> tuple[str, ...]:
-    """Addresses that are in the room but are not attending: ShouldBe's own inboxes."""
+    """Addresses that are in the room but are not attending: ShouldBe's own inboxes.
+
+    Every candidate is reduced to its base form, because invites now arrive plus-addressed
+    (`ledger+ab12cd@…`) to carry the routing token. Comparing the tagged address against
+    `SHOULDBE_INBOX` would never match, and ShouldBe would quietly bill itself as an
+    attendee on every meeting it was invited to — inflating every Door A cost. The .ics
+    adapter compares against these after the same reduction.
+    """
     candidates = [
         os.getenv("SHOULDBE_INBOX", ""),
         payload.get("OriginalRecipient") or "",
         payload.get("To") or "",
     ]
-    return tuple(address.strip().lower() for address in candidates if address and "@" in address)
+    seen = {strip_subaddress(address) for address in candidates}
+    seen |= {normalize_address(address) for address in candidates}
+    return tuple(sorted(address for address in seen if address))
 
 
 @router.post("/inbound-email")
@@ -93,8 +102,9 @@ def inbound_email(
         logger.info("Ignoring an inbound email: %s", failure)
         return {"status": "ignored", "reason": str(failure)}
 
-    # Email-door meetings are attributed to the shared guest (doc 2 §5.2's known edge).
-    owner = get_or_create_guest(session)
+    # Whose ledger this lands on: routing token, then organizer address, then claimed
+    # domain, then the shared guest. Closes doc 2 §5.2's known edge.
+    owner = resolve_owner(session, payload, invite)
     source_key = source_key_for(payload, ics_text)
 
     if source_key:
@@ -105,8 +115,19 @@ def inbound_email(
 
     analysis = analyze(invite, get_tier_rates(session, owner.id))
 
+    # Rendered now, not at send time: `compose_reply` needs the `MeetingAnalysis`, which
+    # only exists here, so the outbox stores finished text and the drain needs just the row.
+    subject, body = compose_reply(analysis)
+    organizer = normalize_address(invite.organizer_email)
+
     try:
-        meeting = save_analysis(session, owner.id, analysis, source_key)
+        meeting = save_analysis(
+            session,
+            owner.id,
+            analysis,
+            source_key,
+            reply=(organizer, subject, body) if organizer else None,
+        )
     except IntegrityError:
         # A retry that arrived while the first delivery was still being scored. The
         # unique constraint is the real guarantee; the lookup above is just the fast path.
@@ -119,8 +140,14 @@ def inbound_email(
             "reply": "skipped",
         }
 
-    # Reply after responding. Scoring plus an SMTP round trip is exactly the latency that
+    # Drain after responding. Scoring plus an SMTP round trip is exactly the latency that
     # trips Postmark's timeout and starts the redelivery loop this handler defends against.
-    background.add_task(send_reply, analysis, invite.organizer_email)
+    # If this pass fails, the reply is still a committed row: the periodic drain retries it.
+    background.add_task(drain_outbox_in_new_session)
 
-    return {"status": "analyzed", "meeting_id": meeting.id, "reply": "queued"}
+    return {
+        "status": "analyzed",
+        "meeting_id": meeting.id,
+        "user_id": owner.id,
+        "reply": "queued" if organizer else "no-organizer",
+    }

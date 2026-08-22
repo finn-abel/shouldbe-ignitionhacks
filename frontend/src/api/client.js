@@ -105,3 +105,23 @@ export function convertMeeting(id) {
     body: JSON.stringify({ status: 'converted' }),
   });
 }
+
+// --- the email door (doc 2 §5.2) ---
+
+/** The address to invite ShouldBe from, plus any claimed company domain. */
+export function getInboundRoute() {
+  return request('/api/inbound-route');
+}
+
+/** Claim a company domain so colleagues' invites are attributed here. Null clears it. */
+export function setInboundDomain(domain) {
+  return request('/api/inbound-route', {
+    method: 'PUT',
+    body: JSON.stringify({ domain }),
+  });
+}
+
+/** Queued and delivered replies — how you tell "not sent yet" from "never sent". */
+export function listOutbox() {
+  return request('/api/outbox');
+}
