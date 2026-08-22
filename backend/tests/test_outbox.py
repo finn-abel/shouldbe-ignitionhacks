@@ -237,3 +237,51 @@ def test_the_outbox_is_scoped_to_its_owner(session, user, configured, monkeypatc
 
     assert len(list_for_user(session, user.id)) == 1
     assert list_for_user(session, other.id) == []
+
+
+# ------------------------------------- the key must identify the message, not the row
+
+
+def _reply(id, to="dana@northwind.example", subject="Sync — Should Be an email (3/10)",
+           body="body text"):
+    from types import SimpleNamespace
+
+    return SimpleNamespace(id=id, to_email=to, subject=subject, text_body=body)
+
+
+def test_the_same_reply_retried_reuses_its_key():
+    """The key's original job: a drain that times out after the provider accepted the
+    message must not send it twice on the next pass."""
+    from app.services.email import idempotency_key_for
+
+    assert idempotency_key_for(_reply(3)) == idempotency_key_for(_reply(3))
+
+
+def test_two_different_replies_that_share_a_row_id_do_not_share_a_key():
+    """The bug: row ids are unique per database, and the Resend account is not.
+
+    A local SQLite run and the deployed Postgres both hand out row 3, as does any database
+    that has been reset. Under the old `shouldbe-outbox-{id}` key the second message was
+    refused with HTTP 409 for 24 hours, retried into the ground, and buried as FAILED
+    having never been sent — a reply lost to an ID collision, which is the exact failure
+    the outbox exists to prevent.
+    """
+    from app.services.email import idempotency_key_for
+
+    local = _reply(3, subject="Standup — Should Be an email (2/10)", body="one meeting")
+    deployed = _reply(3, subject="Pricing — Should Be a meeting (8/10)", body="another")
+
+    assert idempotency_key_for(local) != idempotency_key_for(deployed)
+
+
+def test_the_key_changes_with_every_part_of_the_message():
+    from app.services.email import idempotency_key_for
+
+    base = _reply(3)
+    for changed in (
+        _reply(3, to="someone.else@northwind.example"),
+        _reply(3, subject="Different subject"),
+        _reply(3, body="different body"),
+        _reply(4),
+    ):
+        assert idempotency_key_for(changed) != idempotency_key_for(base)

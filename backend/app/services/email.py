@@ -16,6 +16,7 @@ verification alone, which is DNS and therefore minutes, so it is what makes repl
 the organizer who actually invited ShouldBe rather than only the operator.
 """
 
+import hashlib
 import logging
 import os
 
@@ -268,6 +269,30 @@ def _post_to_provider(
     return _send_via_postmark(sender, to_email, subject, text_body)
 
 
+def idempotency_key_for(reply) -> str:
+    """A key that identifies this exact message, not this row number.
+
+    The point of the key is unchanged: a drain that times out *after* the provider already
+    accepted a message must not send it again on the next pass. Resend honours a key for
+    24 hours and rejects a reuse whose body differs, with HTTP 409.
+
+    It used to be `shouldbe-outbox-{id}`, which is unique only within one database — and
+    the Resend account is not. A local SQLite run and the deployed Postgres both hand out
+    row 3, as does any database that has been reset, so two entirely different replies
+    would claim one key. The second is then refused for 24 hours: the row retries, gets
+    409 every time, and is eventually buried as FAILED having never been sent. A reply
+    lost to an ID collision between environments is precisely what the outbox exists to
+    prevent.
+
+    Hashing the content fixes it in both directions. The same row retried with the same
+    body produces the same key, so the de-duplication still works; two different messages
+    can never collide, whichever database numbered them.
+    """
+    fingerprint = "\0".join((reply.to_email, reply.subject, reply.text_body))
+    digest = hashlib.sha256(fingerprint.encode("utf-8")).hexdigest()[:32]
+    return f"shouldbe-{reply.id}-{digest}"
+
+
 def drain_outbox(session, limit: int = DRAIN_BATCH_SIZE) -> int:
     """Try every queued reply. Returns how many were accepted by Postmark.
 
@@ -286,9 +311,7 @@ def drain_outbox(session, limit: int = DRAIN_BATCH_SIZE) -> int:
             reply.to_email,
             reply.subject,
             reply.text_body,
-            # Stable per reply, so a drain that times out after the provider already
-            # accepted the message does not send it a second time on the next pass.
-            idempotency_key=f"shouldbe-outbox-{reply.id}",
+            idempotency_key=idempotency_key_for(reply),
         )
         if outcome.ok:
             mark_sent(session, reply)
