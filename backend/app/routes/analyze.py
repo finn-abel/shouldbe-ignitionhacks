@@ -11,11 +11,20 @@ from app.routes.auth import acting_user
 from app.schemas.api import MeetingRead
 from app.schemas.invite import ManualMeetingInput
 from app.services.pipeline import analyze
+from app.services.rate_limit import FixedWindowLimiter, rate_limited
 
 router = APIRouter(prefix="/api", tags=["analyze"])
 
+# Every call here can spend LLM tokens. Generous for a person clicking Analyze, and a
+# hard stop for a script pointed at the endpoint.
+ANALYZE_LIMIT = FixedWindowLimiter(limit=30, window_seconds=60)
 
-@router.post("/analyze", response_model=MeetingRead)
+
+@router.post(
+    "/analyze",
+    response_model=MeetingRead,
+    dependencies=[Depends(rate_limited(ANALYZE_LIMIT))],
+)
 def analyze_meeting(
     form: ManualMeetingInput,
     session: Session = Depends(get_session),

@@ -125,3 +125,29 @@ services:
       - path: /*
         name: Referrer-Policy
         value: strict-origin-when-cross-origin
+      - path: /*
+        name: X-Frame-Options
+        value: DENY
+      - path: /*
+        name: Strict-Transport-Security
+        value: max-age=31536000; includeSubDomains
+      - path: /*
+        name: Permissions-Policy
+        value: camera=(), microphone=(), geolocation=()
+      # Vite emits hashed JS/CSS files and no inline script, so script-src can stay tight.
+      # `style-src 'unsafe-inline'` is the one concession: React sets element styles
+      # directly for the burn-rate chart. `connect-src` must list the API's own origin —
+      # if you change VITE_API_BASE_URL, change it here too or every fetch is blocked.
+      - path: /*
+        name: Content-Security-Policy
+        value: >-
+          default-src 'self';
+          script-src 'self';
+          style-src 'self' 'unsafe-inline';
+          img-src 'self' data:;
+          font-src 'self';
+          connect-src 'self' https://shouldbe-api.onrender.com;
+          frame-ancestors 'none';
+          base-uri 'self';
+          form-action 'self';
+          object-src 'none'

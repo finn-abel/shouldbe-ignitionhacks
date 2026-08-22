@@ -21,6 +21,7 @@ import os
 
 import httpx
 
+from app.config import env_flag, is_deployed
 from app.enums import Verdict
 from app.schemas.api import MeetingAnalysis
 from app.services.costing import billable_minutes, is_clamped
@@ -114,6 +115,20 @@ class SendOutcome:
 # "not yet". 300 is a malformed address; 406 is an inactive/suppressed recipient.
 # https://postmarkapp.com/developer/api/overview#error-codes
 PERMANENT_ERROR_CODES = frozenset({300, 406})
+
+
+def _dry_run() -> bool:
+    """Whether sending is suppressed. On by default anywhere that is not deployed.
+
+    `load_dotenv()` resolves relative to the package, not the working directory, so a
+    developer's real RESEND_API_KEY is loaded by *any* local run — including a test that
+    posts a made-up invite at the webhook. The recipient of that test is whatever address
+    the invite names, so the failure mode is real mail to a real stranger from a verified
+    domain. Deployed behaviour is unchanged; locally you now have to ask.
+    """
+    if env_flag("SHOULDBE_EMAIL_DRYRUN", False):
+        return True
+    return not is_deployed() and not env_flag("SHOULDBE_EMAIL_LIVE", False)
 
 
 def _outbound_provider() -> str:
@@ -220,6 +235,15 @@ def _post_to_provider(
     to_email: str, subject: str, text_body: str, idempotency_key: str = ""
 ) -> SendOutcome:
     """Send one message. Never raises; classifies the failure instead."""
+    if _dry_run():
+        # Temporary, not permanent: the row stays QUEUED and is visible in /api/outbox, so
+        # nothing is lost and it sends for real the moment this is switched off.
+        logger.warning(
+            "DRY RUN: not sending %r to %s. Set SHOULDBE_EMAIL_LIVE=1 to send from a "
+            "local run.", subject, to_email,
+        )
+        return SendOutcome(False, "Dry run: outbound email is disabled locally.", permanent=False)
+
     try:
         provider = _outbound_provider()
     except RuntimeError as misconfigured:

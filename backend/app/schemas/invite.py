@@ -14,6 +14,16 @@ from app.services.costing import OCCURRENCES_PER_YEAR
 
 DEFAULT_DURATION_MINUTES = 60
 
+# Head counts and free text both used to be unbounded, and both are reachable from a tiny
+# request body. `{"ic": 100000000}` was ~30 bytes that expanded into a hundred-million-entry
+# list — one entry per attendee — which was then validated, priced, and written to a JSON
+# column. A cap is the whole fix: no real meeting is near these numbers, and a request that
+# exceeds them is a 422 instead of an allocation the process does not survive.
+MAX_ATTENDEES = 1000
+MAX_DESCRIPTION_CHARS = 20_000
+# One budget row is written per scope in a single PUT, so the list needs a ceiling too.
+MAX_BUDGET_SCOPES = 100
+
 
 def normalised_recurrence(is_recurring: bool, recurrence_freq: str | None) -> str | None:
     """Validate and upper-case a recurrence, or clear it for a one-off meeting.
@@ -40,15 +50,15 @@ class ParsedInvite(BaseModel):
     """What every door produces and the pipeline consumes."""
 
     title: str = Field(min_length=1, max_length=512)
-    description: str = ""
+    description: str = Field(default="", max_length=MAX_DESCRIPTION_CHARS)
     start: datetime | None = None
     duration_minutes: int = Field(default=DEFAULT_DURATION_MINUTES, ge=0)
-    attendee_tiers: list[Tier] = Field(default_factory=list)
+    attendee_tiers: list[Tier] = Field(default_factory=list, max_length=MAX_ATTENDEES)
     organizer_email: str = ""
     is_recurring: bool = False
     recurrence_freq: str | None = None
     budget_scope_type: BudgetScope = BudgetScope.USER
-    budget_scope_name: str = "Personal"
+    budget_scope_name: str = Field(default="Personal", max_length=255)
 
     @property
     def attendee_count(self) -> int:
@@ -72,7 +82,7 @@ class ManualMeetingInput(BaseModel):
     """
 
     title: str = Field(min_length=1, max_length=512)
-    description: str = ""
+    description: str = Field(default="", max_length=MAX_DESCRIPTION_CHARS)
     start: datetime | None = None
     duration_minutes: int = Field(default=DEFAULT_DURATION_MINUTES, ge=0, le=24 * 60)
     attendees: dict[Tier, int] = Field(default_factory=dict)
@@ -84,10 +94,23 @@ class ManualMeetingInput(BaseModel):
 
     @field_validator("attendees")
     @classmethod
-    def _no_negative_head_counts(cls, value: dict[Tier, int]) -> dict[Tier, int]:
+    def _sane_head_counts(cls, value: dict[Tier, int]) -> dict[Tier, int]:
+        """Reject negatives, and reject a total nobody could fit in a meeting.
+
+        The total is what matters: `to_parsed_invite` expands these counts into one list
+        entry per attendee, so an unbounded sum is an unbounded allocation driven by a
+        request body of a few dozen bytes.
+        """
         for tier, count in value.items():
             if count < 0:
                 raise ValueError(f"Attendee count for {tier.value!r} must not be negative.")
+
+        total = sum(value.values())
+        if total > MAX_ATTENDEES:
+            raise ValueError(
+                f"{total} attendees is more than the {MAX_ATTENDEES} this supports. "
+                "Check the head counts."
+            )
         return value
 
     @model_validator(mode="after")

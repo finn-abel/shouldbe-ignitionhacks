@@ -14,9 +14,11 @@ from sqlalchemy.orm import Session
 
 from app.data.models import InboundRoute, User
 
-# 8 hex characters. Long enough that nobody guesses another user's ledger by fuzzing the
-# webhook, short enough to read out loud and retype from a slide.
-TOKEN_BYTES = 4
+# 16 hex characters (64 bits). This was 8, which is 32 bits — enumerable in hours by
+# anything that can reach the webhook, and the webhook is only as closed as its shared
+# secret. Still short enough to read off a slide, and existing shorter tokens keep working
+# because lookup is by value.
+TOKEN_BYTES = 8
 
 DEFAULT_INBOX = "ledger@example.invalid"
 
