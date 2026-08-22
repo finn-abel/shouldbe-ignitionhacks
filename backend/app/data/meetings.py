@@ -1,8 +1,8 @@
-"""Meeting ledger persistence (doc 2 §3.1: `data/` is ORM models + DB access).
+"""Meeting ledger persistence.
 
 Every read is scoped by `user_id`. The ledger records **all** analyzed meetings, `keep`
 verdicts included — it is total meeting spend, and the verdict is an attribute of the
-transaction rather than a filter on what gets written (doc 2 §4.4, §6).
+transaction rather than a filter on what gets written.
 """
 
 from dataclasses import dataclass
@@ -43,7 +43,7 @@ def _seat_rows(
                 email=key,
                 tier=tier,
                 hourly_rate=rate_for(tier, tier_rates),
-                # A seat with no address is not unidentified — Door B's head counts are
+                # A seat with no address is not unidentified — manual-form head counts are
                 # anonymous by design and their tiers came from the user directly.
                 is_assumed=bool(key) and key not in known,
             )
@@ -65,7 +65,7 @@ def save_analysis(
     `source_key` identifies the invite a meeting came from, so a redelivered inbound
     email cannot land twice. It is None for the manual form, which has no such notion.
 
-    `reply` is an optional `(to_email, subject, text_body)` for Door A, queued in this
+    `reply` is an optional `(to_email, subject, text_body)` for inbound email, queued in this
     same commit. Committing it separately would mean a meeting could be on the books with
     its reply lost in between — which is the exact failure the outbox exists to remove. If
     the unique constraint rejects the meeting on a redelivery, the reply rolls back with it.
@@ -288,7 +288,7 @@ class NotConvertible(Exception):
 
 
 def convert_meeting(session: Session, user_id: int, meeting_id: int) -> Meeting | None:
-    """Swap a flagged meeting for its drafted email (doc 2 §5.4).
+    """Swap a flagged meeting for its drafted email.
 
     Returns None if the meeting does not exist or belongs to someone else. Converting an
     already-converted meeting is a no-op, so a double click cannot inflate savings.

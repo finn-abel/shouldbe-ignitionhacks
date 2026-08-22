@@ -233,7 +233,7 @@ def test_the_reply_subject_states_the_verdict_the_dashboard_states():
 
 
 def test_the_verdict_wording_matches_the_frontend_copy():
-    """The two live in different languages, so nothing but a test keeps them in step."""
+    """The two live in different languages, so this keeps them aligned."""
     import re
     from pathlib import Path
 

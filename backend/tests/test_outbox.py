@@ -123,7 +123,7 @@ def test_a_rejected_redelivery_leaves_no_orphan_reply(session, user):
 
 
 def test_the_manual_form_queues_nothing(session, user):
-    # Door B has no organizer to reply to.
+    # The manual form has no organizer to reply to.
     save_analysis(session, user.id, an_analysis())
 
     assert session.query(EmailOutbox).count() == 0

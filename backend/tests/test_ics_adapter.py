@@ -1,8 +1,8 @@
-"""Door A / Door C adapter tests (doc 3 step 13).
+""".ics adapter tests.
 
 Two things here are money logic, not parsing trivia, and both are tested as such: which
 attendees get billed, and how an RRULE becomes an annualized figure. The reply's privacy
-guarantees are asserted too — they are a product promise from doc 1 §59-61.
+guarantees are asserted too — they are a product promise.
 """
 
 import base64

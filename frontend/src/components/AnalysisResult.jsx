@@ -16,7 +16,7 @@ export default function AnalysisResult({ analysis }) {
             live, and write the email that replaces it when it should not.
           </p>
         </div>
-        <dl className="result__empty-steps" aria-label="Analysis output">
+        <dl className="result__empty-summary" aria-label="Analysis output">
           <div>
             <dt>Cost</dt>
             <dd>Occurrence and annualized exposure</dd>

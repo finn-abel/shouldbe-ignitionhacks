@@ -1,6 +1,6 @@
-"""Meeting cost math — pure functions, no I/O (doc 2 §3.1, §4.4).
+"""Meeting cost math — pure functions, no I/O.
 
-Two privacy rules from doc 1 are structural here, not incidental:
+Two privacy rules are structural here, not incidental:
 
 - Cost is derived from **blended role-tier rates**, never individual salaries.
 - Output is **aggregate only** — a single pooled figure. Nothing in this module returns,
@@ -21,12 +21,12 @@ MINUTES_PER_HOUR = Decimal(60)
 # A calendar is not only meetings. An .ics all-day event reads as 1440 minutes and a
 # week-long conference as 6240, and costing those literally puts a $21,600 "meeting" and a
 # $93,600 one on the books, which detonates the budget headline. The true duration is still
-# recorded on the meeting (doc 2 §4.4); this caps only what it is billed for.
+# recorded on the meeting; this caps only what it is billed for.
 DEFAULT_MAX_BILLABLE_MINUTES = 8 * 60
 
-# Doc 2 §4.2 defaults. Each user may override these; they are the starting point, not a
-# hardcoded basis. The federal reference defaults use salary-band midpoints converted to
-# hourly equivalents with a 37.5-hour work week (1,950 hours/year):
+# Each user may override these defaults; they are the starting point, not a hardcoded
+# basis. The federal reference defaults use salary-band midpoints converted to hourly
+# equivalents with a 37.5-hour work week (1,950 hours/year):
 # IC=IT-02, Senior=IT-03, Manager=IT-04, Exec=EX-03 / Director General.
 DEFAULT_TIER_RATES: dict[Tier, Decimal] = {
     Tier.IC: Decimal("48.96"),
@@ -58,7 +58,7 @@ def max_billable_minutes() -> int:
 
 
 def billable_minutes(duration_minutes: int) -> int:
-    """How much of a meeting's length is charged for. Applies to every door."""
+    """How much of a meeting's length is charged for. Applies to every source."""
     return min(duration_minutes, max_billable_minutes())
 
 

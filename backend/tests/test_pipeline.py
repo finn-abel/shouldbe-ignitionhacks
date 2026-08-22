@@ -1,4 +1,4 @@
-"""Pipeline smoke test (doc 3 step 4, doc 4 testing checklist).
+"""Pipeline smoke test.
 
 One end-to-end pass plus the invariants that hold the analysis record together. The cost
 math and the scoring seam have their own thorough suites; this asserts they are wired up
@@ -64,7 +64,7 @@ def test_a_one_off_meeting_has_no_annualized_cost(monkeypatch):
 
 
 def test_per_user_tier_rates_flow_through(monkeypatch):
-    # Step 9 lets a user edit their rates; the pipeline must honour them.
+    # A user can edit their rates; the pipeline must honour them.
     monkeypatch.setenv("SHOULDBE_USE_STUB", "1")
     invite = ParsedInvite(title="Kickoff", duration_minutes=60, attendee_tiers=[Tier.IC])
 
@@ -72,7 +72,7 @@ def test_per_user_tier_rates_flow_through(monkeypatch):
     assert analyze(invite, {Tier.IC: Decimal("200")}).cost == Decimal("200.00")
 
 
-def test_door_b_form_expands_head_counts_into_attendees():
+def test_manual_form_expands_head_counts_into_attendees():
     form = ManualMeetingInput(
         title="Weekly Engineering Standup",
         duration_minutes=30,

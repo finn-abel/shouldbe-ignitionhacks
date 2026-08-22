@@ -256,14 +256,6 @@ OPENAI_API_KEY=sk-...
 LLM_MAX_TOKENS=4000
 ```
 
-Validate one scoring call:
-
-```bash
-cd backend
-source venv/bin/activate
-python spike_llm.py
-```
-
 `LLM_MAX_TOKENS` is the budget for one scoring call, and on a reasoning model it covers
 the model's own reasoning as well as the answer — with the reasoning spent first. Sized
 for the answer alone it starves the response: at 1200, gpt-5-nano used 1152 tokens

@@ -1,8 +1,8 @@
-"""Money-model tests (doc 2 §6, doc 3 step 6, doc 4 testing checklist).
+"""Money-model tests.
 
 The load-bearing suite alongside the cost math: these four figures are the dashboard, and
-conflating any two of them is the failure mode doc 2 §6 exists to prevent. Pure — the
-functions take `MeetingRead`, so no database is involved.
+conflating any two of them is the failure mode these tests prevent. Pure — the functions
+take `MeetingRead`, so no database is involved.
 """
 
 from datetime import date, datetime, timedelta, timezone
@@ -115,7 +115,7 @@ def test_a_converted_meeting_is_never_both_spend_and_savings():
 
 
 def test_converting_moves_money_from_avoidable_to_reclaimed():
-    # The step-10 transition, asserted on the derivations that render it.
+    # The conversion transition, asserted on the derivations that render it.
     before = [EMAIL_HELD]
     after = [meeting("500.00", Verdict.EMAIL, Status.CONVERTED, reclaimed="500.00")]
 
@@ -159,7 +159,7 @@ def test_cents_survive_summation():
 
 
 def test_reclaimed_savings_reads_the_field_not_the_cost():
-    # Step 10 sets reclaimed_savings = cost, but the derivation must not assume it.
+    # Conversion sets reclaimed_savings = cost, but the derivation must not assume it.
     partial = meeting("600.00", Verdict.EMAIL, Status.CONVERTED, reclaimed="450.00")
 
     assert reclaimed_savings([partial]) == Decimal("450.00")

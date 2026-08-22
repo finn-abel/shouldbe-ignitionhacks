@@ -1,4 +1,4 @@
-"""Role-tier hourly rate config (doc 2 §4.2). Thin: parse, delegate, return."""
+"""Role-tier hourly rate config. Thin: parse, delegate, return."""
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session

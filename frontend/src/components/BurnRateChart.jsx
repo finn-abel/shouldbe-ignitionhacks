@@ -25,17 +25,17 @@ export default function BurnRateChart({ buckets, bucket }) {
     const peak = Math.max(...values, 1);
     const { w, h, padX, padTop, padBottom } = VIEW;
     const plot = h - padTop - padBottom;
-    const step = buckets.length > 1 ? (w - padX * 2) / (buckets.length - 1) : 0;
+    const spacing = buckets.length > 1 ? (w - padX * 2) / (buckets.length - 1) : 0;
 
     const points = buckets.map((b, i) => ({
       ...b,
       value: values[i],
-      x: buckets.length > 1 ? padX + i * step : w / 2,
+      x: buckets.length > 1 ? padX + i * spacing : w / 2,
       y: padTop + plot - (values[i] / peak) * plot,
     }));
 
     const peakPoint = points[values.indexOf(Math.max(...values))];
-    return { points, peak, peakPoint, baseline: padTop + plot, step };
+    return { points, peak, peakPoint, baseline: padTop + plot, spacing };
   }, [buckets]);
 
   if (!geometry) {
@@ -90,9 +90,9 @@ export default function BurnRateChart({ buckets, bucket }) {
           <rect
             key={`hit-${p.period}`}
             className="chart__hit"
-            x={p.x - (geometry.step || VIEW.w) / 2}
+            x={p.x - (geometry.spacing || VIEW.w) / 2}
             y="0"
-            width={geometry.step || VIEW.w}
+            width={geometry.spacing || VIEW.w}
             height={VIEW.h}
             onMouseEnter={() => setHovered(i)}
           />

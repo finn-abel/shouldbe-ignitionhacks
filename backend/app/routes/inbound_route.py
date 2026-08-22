@@ -1,4 +1,4 @@
-"""The user's email door (doc 2 §5.2). Thin: parse, delegate, return.
+"""The user's email door. Thin: parse, delegate, return.
 
 `GET` hands back the address to invite ShouldBe from. `PUT` claims a company domain so
 colleagues are attributed without doing anything at all.

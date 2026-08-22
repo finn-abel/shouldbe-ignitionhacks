@@ -1,10 +1,10 @@
-"""Necessity scoring and the LLM stub seam (doc 2 §8).
+"""Necessity scoring and the LLM stub seam.
 
 The whole system runs against the stub with no API key: `_call_llm` is the single
-function that changes in step 12, and it returns the same JSON shape either way, so
-nothing downstream of it knows which branch ran.
+function that changes between offline and provider-backed scoring, and it returns the
+same JSON shape either way, so nothing downstream of it knows which branch ran.
 
-Two rules from doc 1 §59-61 are enforced here rather than trusted to the model:
+Two privacy rules are enforced here rather than trusted to the model:
 the drafted alternative email carries **no cost figures**, and nothing carries
 individual-level data. `score_meeting` is otherwise pure — no DB, no HTTP.
 """
@@ -670,7 +670,7 @@ def _classify_llm_exception(
 
 
 def _call_llm(prompt: str) -> str:
-    """The seam (doc 2 §8) — the only function that changes between stub and provider.
+    """The only function that changes between stub and provider.
 
     Returns the model's raw text. Everything downstream parses that text and never
     learns which branch produced it.

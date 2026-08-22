@@ -24,10 +24,10 @@ guest entry included — with nothing in the logs to explain it. The blueprint a
 ## 1. Push the branch
 
 ```bash
-git push -u origin deployment-phase
+git push -u origin main
 ```
 
-The blueprint can deploy any branch; you pick it in the next step.
+The blueprint can deploy any branch; choose the one you are submitting.
 
 ## 2. Create the blueprint
 
@@ -42,8 +42,8 @@ The first API deploy takes a few minutes (psycopg2 and the LLM SDKs are the slow
 
 ## 3. Wire the two services to each other
 
-This is the step that cannot be automated: each service needs the other's URL, and
-neither URL exists until Render assigns it. Copy them off the dashboard — **https, no
+This pairing is the one manual part: each service needs the other's URL, and neither URL
+exists until Render assigns it. Copy them off the dashboard — **https, no
 trailing slash**.
 
 | Service | Variable | Value |

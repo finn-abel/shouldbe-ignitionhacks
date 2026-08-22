@@ -1,4 +1,4 @@
-"""Role-tier rate access (doc 2 §4.2) — the privacy-preserving cost basis.
+"""Role-tier rate access — the privacy-preserving cost basis.
 
 Blended rates per role tier. Individual compensation never enters the system.
 """

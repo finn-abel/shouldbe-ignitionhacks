@@ -156,7 +156,7 @@ def test_an_unbounded_description_is_refused():
 
 
 def test_a_hostile_ics_is_clamped_rather_than_crashing_the_webhook():
-    """Door A must bound an oversized invite, not 500 — a 500 is five Postmark retries."""
+    """Inbound email must bound an oversized invite, not 500 — a 500 is five Postmark retries."""
     from app.services.ics_adapter import parse_ics
 
     lines = [

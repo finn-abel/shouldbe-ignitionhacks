@@ -1,6 +1,5 @@
-// Every backend call lives here (doc 2 §3.4) — components never fetch directly.
-// Dev talks to the backend cross-origin and relies on its CORS config (doc 4 task 4-C),
-// which is the same shape as production; no Vite proxy, so dev and prod cannot diverge.
+// Every backend call lives here; components never fetch directly.
+// Dev talks to the backend cross-origin and relies on its CORS config, matching production.
 
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000';
 
@@ -49,7 +48,7 @@ async function request(path, options = {}) {
   return body;
 }
 
-// --- entry (doc 2 §5.5) ---
+// --- entry ---
 
 /** Who this browser is acting as. Throws with status 401 when nobody has entered yet. */
 export function getMe() {
@@ -68,7 +67,7 @@ export function logout() {
 /** A full page navigation, not a fetch: the browser has to follow Google's redirects. */
 export const GOOGLE_LOGIN_URL = `${API_BASE_URL}/api/auth/google/login`;
 
-/** Door B: analyze a typed-in meeting and record it in the ledger. */
+/** Analyze a typed-in meeting and record it in the ledger. */
 export function analyzeMeeting(meeting) {
   return request('/api/analyze', { method: 'POST', body: JSON.stringify(meeting) });
 }
@@ -76,10 +75,6 @@ export function analyzeMeeting(meeting) {
 /** The acting user's ledger, newest first. */
 export function listMeetings() {
   return request('/api/meetings');
-}
-
-export function getMeeting(id) {
-  return request(`/api/meetings/${id}`);
 }
 
 /** The four dollar figures, the burn-rate series, and the budget headline.
@@ -136,7 +131,7 @@ export function forgetPerson(id) {
   return request(`/api/people/${id}`, { method: 'DELETE' });
 }
 
-/** Swap a flagged meeting for the drafted email (doc 2 §5.4). */
+/** Swap a flagged meeting for the drafted email. */
 export function convertMeeting(id) {
   return request(`/api/meetings/${id}`, {
     method: 'PATCH',
@@ -144,7 +139,7 @@ export function convertMeeting(id) {
   });
 }
 
-// --- the email door (doc 2 §5.2) ---
+// --- the email door ---
 
 /** The address to invite ShouldBe from, plus any claimed company domain. */
 export function getInboundRoute() {
@@ -157,9 +152,4 @@ export function setInboundDomain(domain) {
     method: 'PUT',
     body: JSON.stringify({ domain }),
   });
-}
-
-/** Queued and delivered replies — how you tell "not sent yet" from "never sent". */
-export function listOutbox() {
-  return request('/api/outbox');
 }

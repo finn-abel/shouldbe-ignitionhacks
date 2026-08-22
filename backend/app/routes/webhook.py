@@ -1,7 +1,7 @@
-"""Door A — Postmark inbound email (doc 2 §5.2). Thin: parse, delegate, return.
+"""Postmark inbound email. Thin: parse, delegate, return.
 
-The only asymmetry with Doors B and C is the adapter. Once the .ics is a `ParsedInvite`
-this hands it to the same `analyze()` every other door uses.
+The only asymmetry with the other entry paths is the adapter. Once the .ics is a
+`ParsedInvite`, this hands it to the same `analyze()` every other path uses.
 """
 
 import base64
@@ -92,7 +92,7 @@ def _shouldbe_addresses(payload: dict) -> tuple[str, ...]:
     Every candidate is reduced to its base form, because invites now arrive plus-addressed
     (`ledger+ab12cd@…`) to carry the routing token. Comparing the tagged address against
     `SHOULDBE_INBOX` would never match, and ShouldBe would quietly bill itself as an
-    attendee on every meeting it was invited to — inflating every Door A cost. The .ics
+    attendee on every meeting it was invited to — inflating every inbound-invite cost. The .ics
     adapter compares against these after the same reduction.
     """
     candidates = [
@@ -133,7 +133,7 @@ def inbound_email(
         return {"status": "ignored", "reason": str(failure)}
 
     # Whose ledger this lands on: routing token, then organizer address, then claimed
-    # domain, then the shared guest. Closes doc 2 §5.2's known edge.
+    # domain, then the shared guest.
     attribution = resolve_attribution(session, payload, invite)
     owner = attribution.user
     source_key = source_key_for(payload, ics_text)

@@ -1,4 +1,4 @@
-"""Shared domain vocabulary (doc 2 §4).
+"""Shared domain vocabulary.
 
 A leaf module: it imports nothing of ours, so both `services/` and `data/` can depend on
 it without the pure money functions dragging in SQLAlchemy or a database URL.
@@ -8,7 +8,7 @@ from enum import Enum
 
 
 class Tier(Enum):
-    """Role tier — the privacy-preserving cost basis (doc 2 §4.2)."""
+    """Role tier — the privacy-preserving cost basis."""
 
     IC = "ic"
     SENIOR = "senior"
@@ -25,7 +25,7 @@ class BudgetScope(Enum):
 
 
 class Verdict(Enum):
-    """Necessity call (doc 2 §4.4). KEEP = genuine live need; EMAIL = could be async."""
+    """Necessity call. KEEP = genuine live need; EMAIL = could be async."""
 
     KEEP = "keep"
     EMAIL = "email"
@@ -51,7 +51,7 @@ _VERDICT_LABELS = {
 
 
 class Status(Enum):
-    """Lifecycle / money state (doc 2 §6).
+    """Lifecycle / money state.
 
     ANALYZED  — default; the meeting is on the books as spend.
     HELD      — explicitly kept, whether necessary or unnecessary-but-not-converted.

@@ -11,7 +11,7 @@ const PERIODS = [
   { key: 'all', label: 'All time' },
 ];
 
-/** The four dollar concepts of doc 2 §6, kept visibly distinct. */
+/** The four dollar concepts, kept visibly distinct. */
 const TILES = [
   { key: 'necessary_spend', label: 'Necessary', note: 'worth the room', tone: 'ink' },
   { key: 'avoidable_spend', label: 'Avoidable', note: 'flagged, held anyway', tone: 'leak' },
@@ -43,7 +43,7 @@ export default function Dashboard({ refreshKey }) {
   }, [load, refreshKey]);
 
   /**
-   * Convert a flagged meeting (doc 2 §5.4).
+   * Convert a flagged meeting.
    *
    * The row flips immediately so the click has an answer, but every dollar comes back
    * from the server. The browser deriving money is the one thing this app must not do:

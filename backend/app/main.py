@@ -1,4 +1,4 @@
-"""ShouldBe backend — app wiring only (doc 2 §3.5).
+"""ShouldBe backend — app wiring only.
 
 Routes stay thin, services hold all logic, data holds persistence. Nothing in this
 module does any work beyond assembling the app.
@@ -212,7 +212,7 @@ async def security_headers(request, call_next):
 
     return response
 
-# The session cookie carries the acting user id (doc 2 §5.5).
+# The session cookie carries the acting user id.
 #
 # `lax` is right locally, where the frontend and the API are both on localhost and so
 # count as the same site. Deployed they are not: a Render Static Site and a Render Web

@@ -1,10 +1,10 @@
-"""Door A / Door C — turn .ics text into a `ParsedInvite` (doc 2 §5.2, §5.3).
+"""Turn .ics text into a `ParsedInvite`.
 
 This is an adapter and nothing more. It produces exactly the object the manual form
 produces, so an emailed invite and a typed-in meeting flow into the same `analyze()`
 with no branch anywhere downstream.
 
-Run it against a saved file for the dev/fallback path (doc 2 §5.3):
+Run it against a saved file for the dev/fallback path:
 
     cd backend && PYTHONPATH=. python -m app.services.ics_adapter invite.ics
 """
@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_DURATION_MINUTES = 60
 
-# Door A parses whatever arrives at a public webhook, so every field it reads is hostile
+# Inbound email parses whatever arrives at a public webhook, so every field it reads is hostile
 # until clamped. `ParsedInvite` enforces the same limits, but it enforces them by raising —
 # and a 500 on the webhook is a 500 Postmark retries five more times. Clamping here means a
 # malformed or deliberately huge invite is still recorded, just bounded.
@@ -62,7 +62,7 @@ def _rrule_of(event) -> str | None:
 
 
 def recurrence_from_rrule(rrule: str | None) -> str | None:
-    """Map an RRULE to one of the frequencies the cost math knows (doc 2 §6 costing)."""
+    """Map an RRULE to one of the frequencies the cost math knows."""
     if not rrule:
         return None
 
@@ -226,7 +226,7 @@ def source_key_for(payload: dict, ics_text: str) -> str | None:
 
 
 def find_ics_text(payload: dict) -> str:
-    """Pull the calendar part out of Postmark's parsed inbound JSON (doc 2 §5.2).
+    """Pull the calendar part out of Postmark's parsed inbound JSON.
 
     Providers vary: an invite usually arrives as a `text/calendar` attachment, but is
     sometimes pasted into the body instead.
@@ -257,7 +257,7 @@ def find_ics_text(payload: dict) -> str:
     raise NoInviteFound("No calendar attachment on that email.")
 
 
-if __name__ == "__main__":  # Door C: parse and score a saved .ics with no email at all
+if __name__ == "__main__":  # Parse and score a saved .ics with no email at all.
     import json
     import sys
 

@@ -138,7 +138,7 @@ def test_a_known_attendee_is_priced_at_their_real_tier(session, dana):
 
 
 def test_manual_form_seats_are_known_not_unidentified(session, dana):
-    """Door B asks for head counts per tier, so its seats came from the user directly.
+    """The manual form asks for head counts per tier, so its seats came from the user directly.
 
     Anonymous is not the same as unidentified: there is nobody here to go and look up,
     and putting these on the worklist would make it permanently non-empty.
@@ -436,7 +436,7 @@ def test_forgetting_someone_elses_entry_is_a_404(api):
 
 
 def test_resolving_an_invite_with_no_addresses_leaves_the_room_intact():
-    """The regression the seed caught: Door B has head counts and no addresses.
+    """The regression the seed caught: the manual form has head counts and no addresses.
 
     Resolving `[]` into seats replaced a room of fifteen with a room of nobody, so every
     count-only meeting silently cost zero and the ledger totals collapsed. Nothing raised

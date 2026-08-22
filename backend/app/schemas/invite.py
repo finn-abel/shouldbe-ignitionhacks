@@ -1,8 +1,8 @@
-"""`ParsedInvite` and the manual-form input that produces one (doc 2 §3.5).
+"""`ParsedInvite` and the manual-form input that produces one.
 
-Every door — the manual form, an emailed .ics, a saved .ics — is a thin adapter whose only
-job is to produce a `ParsedInvite` (doc 2 §1). `analyze()` never learns which door it came
-through, so the mapping from a door's own shape into this one lives with the schemas.
+Every source — the manual form, an emailed .ics, a saved .ics — is a thin adapter whose
+only job is to produce a `ParsedInvite`. `analyze()` never learns which source it came
+through, so the mapping from a source's own shape into this one lives with the schemas.
 """
 
 from datetime import datetime
@@ -28,10 +28,10 @@ MAX_BUDGET_SCOPES = 100
 def normalised_recurrence(is_recurring: bool, recurrence_freq: str | None) -> str | None:
     """Validate and upper-case a recurrence, or clear it for a one-off meeting.
 
-    `annualized_cost` refuses to guess at a frequency it cannot read, so every door checks
+    `annualized_cost` refuses to guess at a frequency it cannot read, so every source checks
     it here first. Both schemas below run this: `ManualMeetingInput` is the HTTP boundary,
     where a failure must surface as a 422 rather than a 500, and `ParsedInvite` is the
-    boundary the other two doors come through.
+    boundary the other two sources come through.
     """
     if not is_recurring:
         return None
@@ -47,7 +47,7 @@ def normalised_recurrence(is_recurring: bool, recurrence_freq: str | None) -> st
 
 
 class ParsedInvite(BaseModel):
-    """What every door produces and the pipeline consumes."""
+    """What every source produces and the pipeline consumes."""
 
     title: str = Field(min_length=1, max_length=512)
     description: str = Field(default="", max_length=MAX_DESCRIPTION_CHARS)
@@ -55,7 +55,7 @@ class ParsedInvite(BaseModel):
     duration_minutes: int = Field(default=DEFAULT_DURATION_MINUTES, ge=0)
     attendee_tiers: list[Tier] = Field(default_factory=list, max_length=MAX_ATTENDEES)
     # Positionally aligned with `attendee_tiers`: entry i is who seat i is. Empty for a
-    # door that has no addresses to give (the manual form counts heads per tier), and `""`
+    # source that has no addresses to give (the manual form counts heads per tier), and `""`
     # for an individual seat whose address could not be read. Carrying them is what lets
     # an attendee be identified after the fact — the .ics adapter used to count the
     # addresses and throw them away, which made every emailed meeting permanently a guess.
@@ -68,7 +68,7 @@ class ParsedInvite(BaseModel):
 
     @property
     def attendee_count(self) -> int:
-        """One entry per attendee, so the tier list is the head count (see step 2)."""
+        """One entry per attendee, so the tier list is the head count."""
         return len(self.attendee_tiers)
 
     @model_validator(mode="after")
@@ -110,7 +110,7 @@ class ParsedInvite(BaseModel):
 
 
 class ManualMeetingInput(BaseModel):
-    """Door B — the dashboard form (doc 2 §5.1).
+    """The dashboard form input.
 
     Attendees arrive as a head count per role tier rather than one entry each: it is what
     a form can reasonably ask for, and it makes the demo's "change 3 attendees to 10"
@@ -157,7 +157,7 @@ class ManualMeetingInput(BaseModel):
         return self
 
     def to_parsed_invite(self) -> ParsedInvite:
-        """Door B's adapter: expand the per-tier counts into one entry per attendee."""
+        """Manual-form adapter: expand the per-tier counts into one entry per attendee."""
         tiers = [tier for tier, count in self.attendees.items() for _ in range(count)]
         return ParsedInvite(
             title=self.title,

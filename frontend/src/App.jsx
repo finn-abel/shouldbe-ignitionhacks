@@ -198,18 +198,18 @@ export default function App() {
                           blended federal rate basis, scores the necessity, and records the decision.
                         </p>
                       </div>
-                      <dl className="analysis-rail" aria-label="Analysis workflow">
+                      <dl className="analysis-rail" aria-label="Analysis summary">
                         <div>
-                          <dt>1</dt>
-                          <dd>Cost</dd>
+                          <dt>Cost</dt>
+                          <dd>Occurrence and annual exposure</dd>
                         </div>
                         <div>
-                          <dt>2</dt>
-                          <dd>Score</dd>
+                          <dt>Necessity</dt>
+                          <dd>Live-room signal from 1 to 10</dd>
                         </div>
                         <div>
-                          <dt>3</dt>
-                          <dd>Record</dd>
+                          <dt>Ledger</dt>
+                          <dd>Decision recorded for follow-up</dd>
                         </div>
                       </dl>
                     </header>

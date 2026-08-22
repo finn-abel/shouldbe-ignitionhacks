@@ -1,6 +1,6 @@
-"""Whose ledger does an emailed invite land on? (doc 2 §5.2's known edge.)
+"""Whose ledger does an emailed invite land on?
 
-Door A used to attribute every invite to the shared guest, because an inbound email
+Inbound invites used to land on the shared guest, because an inbound email
 carries no session cookie. This module resolves an owner instead, trying four signals in
 descending order of how deliberate they are:
 
@@ -85,10 +85,10 @@ def normalize_address(address: str | None) -> str:
 def strip_subaddress(address: str) -> str:
     """`ledger+ab12cd@host` -> `ledger@host`.
 
-    Door A's own inbox is excluded from attendee billing by comparing addresses. Once
+    ShouldBe's own inbox is excluded from attendee billing by comparing addresses. Once
     invites arrive plus-addressed, an exact comparison stops matching and ShouldBe starts
     billing *itself* as an attendee on every meeting it is invited to — silently inflating
-    every Door A cost. This is what keeps that comparison honest.
+    every inbound-invite cost. This is what keeps that comparison honest.
     """
     normalized = normalize_address(address)
     if not normalized:

@@ -9,7 +9,7 @@ const STATUS = { analyzed: 'On the books', held: 'Held', converted: 'Converted' 
 const MAX_BILLABLE_MINUTES = 8 * 60;
 
 /**
- * The ledger — every analyzed meeting as a costed transaction (doc 2 §4.4).
+ * The ledger — every analyzed meeting as a costed transaction.
  * `keep` verdicts are listed too: this is total spend, and the verdict is an attribute
  * of the transaction rather than a filter on what appears.
  */

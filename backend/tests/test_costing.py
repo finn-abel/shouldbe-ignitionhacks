@@ -1,4 +1,4 @@
-"""Cost math tests (doc 3 step 2). Pure — no DB, no network, no app."""
+"""Cost math tests. Pure — no DB, no network, no app."""
 
 from decimal import Decimal
 
@@ -24,7 +24,7 @@ def test_multi_tier_hour_hits_an_exact_figure():
 
 
 def test_one_hour_ten_people_costs_hundreds():
-    # Doc 1's framing case: six ICs, two seniors, a manager and an exec for an hour.
+    # Framing case: six ICs, two seniors, a manager and an exec for an hour.
     attendees = [Tier.IC] * 6 + [Tier.SENIOR] * 2 + [Tier.MANAGER, Tier.EXEC]
 
     cost = meeting_cost(attendees, 60)
@@ -97,7 +97,7 @@ def test_negative_duration_is_rejected():
 
 
 def test_returns_one_aggregate_figure_never_a_breakdown():
-    # The privacy rule from doc 1 §59-60, asserted structurally.
+    # The privacy rule, asserted structurally.
     assert isinstance(meeting_cost([Tier.IC, Tier.EXEC], 60), Decimal)
 
 

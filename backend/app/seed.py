@@ -1,4 +1,4 @@
-"""Seed the shared guest user with curated demo data (doc 2 §7).
+"""Seed the shared guest user with curated demo data.
 
 Run from /backend:  PYTHONPATH=. python -m app.seed
 
@@ -25,7 +25,7 @@ from app.schemas.invite import ParsedInvite
 from app.services.directory import resolved_invite
 from app.services.pipeline import analyze
 
-# The seeded spend meaningfully exceeds this, so the dashboard opens "over budget" (§7).
+# The seeded spend meaningfully exceeds this, so the dashboard opens "over budget".
 # Sized against the curated federal-rate set below so this month's spend is still roughly
 # 34% over budget.
 GUEST_BUDGET = Decimal("4021.86")

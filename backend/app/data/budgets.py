@@ -1,4 +1,4 @@
-"""Budget access (doc 2 §4.3) — monthly guardrails by user/team/department."""
+"""Budget access — monthly guardrails by user/team/department."""
 
 from dataclasses import dataclass
 

@@ -1,8 +1,8 @@
-"""`analyze()` — the one pipeline every door feeds (doc 2 §1, §5).
+"""`analyze()` — the one pipeline every source feeds.
 
-Door A (emailed .ics), Door B (manual form) and Door C (saved .ics) all reduce to a
-`ParsedInvite` before they get here, so this function is byte-for-byte the same code on
-every path. It is pure: no HTTP, no database.
+Emailed invites, manual entries, and saved .ics files all reduce to a `ParsedInvite`
+before they get here, so this function is byte-for-byte the same code on every path. It is
+pure: no HTTP, no database.
 """
 
 from decimal import Decimal
@@ -54,7 +54,7 @@ def analyze(
         score=assessment["score"],
         verdict=verdict,
         reasoning=assessment["reasoning"],
-        # A drafted replacement exists only for a meeting we are saying to replace (§4.4).
+        # A drafted replacement exists only for a meeting we are saying to replace.
         alternative_email=assessment["alternative_email"] if verdict is Verdict.EMAIL else None,
         analysis_notice=assessment.get("analysis_notice"),
         analysis_error_code=assessment.get("analysis_error_code"),

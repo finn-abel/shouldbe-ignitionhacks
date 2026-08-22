@@ -1,4 +1,4 @@
-"""Door A must survive redelivery (doc 3 step 13 hardening).
+"""Inbound email must survive redelivery.
 
 Postmark redelivers an inbound message up to six times over ~51 minutes — on a non-2xx,
 on a network failure, and on a timeout where the endpoint did the work but answered too
@@ -130,7 +130,7 @@ def test_a_recorded_invite_is_found_before_any_second_analysis(session, guest):
 
 
 def test_manual_form_meetings_are_unconstrained(session, guest):
-    # source_key is NULL for Door B, and SQL treats every NULL as distinct — two
+    # source_key is NULL for the manual form, and SQL treats every NULL as distinct — two
     # identical typed-in meetings are two real meetings.
     _record(session, guest, None)
     _record(session, guest, None)

@@ -1,4 +1,4 @@
-"""User lookup and entry (doc 2 §4.1, §5.5).
+"""User lookup and entry.
 
 Two ways in, one outcome: Google sign-in resolves to a `User` found or created by its
 `google_sub`, "continue as guest" resolves to the single shared `is_guest` row. Both hand
@@ -35,7 +35,7 @@ def _with_starting_config(user: User) -> User:
 
 
 def get_or_create_guest(session: Session) -> User:
-    """The one shared guest row (doc 2 §4.1).
+    """The one shared guest row.
 
     Normally created by `seed.py` with curated data. Created bare here as a fallback so
     guest entry works even on a database nobody remembered to seed.
@@ -63,7 +63,7 @@ def get_or_create_guest(session: Session) -> User:
 def find_or_create_by_google(
     session: Session, google_sub: str, email: str, display_name: str
 ) -> User:
-    """Resolve a Google sign-in to a user, keyed on the stable `sub` claim (doc 2 §5.5)."""
+    """Resolve a Google sign-in to a user, keyed on the stable `sub` claim."""
     user = session.scalar(select(User).where(User.google_sub == google_sub))
     if user is not None:
         return user
