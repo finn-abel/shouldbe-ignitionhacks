@@ -93,8 +93,15 @@ services:
         sync: false
       - key: POSTMARK_WEBHOOK_SECRET
         sync: false
+
+      # NOT a secret — it is the public address users are told to invite, and every
+      # per-user invite address is derived from it (`ledger+<token>@…`). It was `sync:
+      # false`, which meant the blueprint carried the key and no value; left blank at
+      # creation, every user's door rendered as the `example.invalid` placeholder. A
+      # literal value is what makes a fresh deploy hand out working addresses.
+      # The host's MX must point at inbound.postmarkapp.com — see DEPLOY.md §4.
       - key: SHOULDBE_INBOX
-        sync: false
+        value: ledger@invite.shouldbe-ai.me
       - key: RESEND_API_KEY
         sync: false
       - key: RESEND_FROM

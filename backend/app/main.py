@@ -63,6 +63,26 @@ def _session_secret() -> str:
     return secrets.token_urlsafe(32)
 
 
+def _warn_if_no_inbox() -> None:
+    """Say so at boot when a deployed instance is handing out placeholder addresses.
+
+    `invite_address_for` falls back to `ledger+<token>@example.invalid` when
+    SHOULDBE_INBOX is unset, which is right locally and near-invisible in the cloud: the
+    app looks healthy, every user's email door is quietly undeliverable, and the only
+    signal is a line of small print in the UI. Not a refusal to boot — inbound email is
+    an optional upgrade and a demo without it is a working demo — but it should never
+    again be something you find out by reading the address.
+    """
+    if not is_deployed() or (os.getenv("SHOULDBE_INBOX") or "").strip():
+        return
+
+    logger.warning(
+        "SHOULDBE_INBOX is unset. Every invite address will render as the "
+        "example.invalid placeholder and no invite can reach this instance. Set it to "
+        "the address whose domain has MX pointed at inbound.postmarkapp.com."
+    )
+
+
 async def _drain_forever(interval: float):
     """Retry queued replies in the background, forever.
 
@@ -86,6 +106,7 @@ async def _drain_forever(interval: float):
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     init_db()
+    _warn_if_no_inbox()
 
     # A freshly provisioned Render Postgres is empty, and nobody demos an empty dashboard.
     # Off by default so a local run is never surprised by rows it did not ask for; the
