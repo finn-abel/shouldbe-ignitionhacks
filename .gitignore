@@ -141,3 +141,11 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
+
+shouldbe-docs
+
+# ShouldBe — local dev (task 4-A)
+venv/
+.venv/
+*.db
+.DS_Store

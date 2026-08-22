@@ -1,0 +1,20 @@
+# --- core service ---
+fastapi
+uvicorn[standard]
+pydantic
+python-dotenv
+
+# --- persistence (step 1) ---
+sqlalchemy
+
+# --- .ics parsing (step 4 / Door C) ---
+ics
+
+# --- tests ---
+pytest
+httpx          # FastAPI TestClient dependency
+
+# --- NOT YET USED — added in the step that needs them ---
+# authlib               # Google OAuth            (step 11)
+# postmarker            # Postmark in/outbound    (step 13)
+# anthropic             # LLM provider SDK        (step 12)
