@@ -18,18 +18,33 @@
   box-shadow: 0 1px 0 oklch(16% 0.06 156);
 }
 
+.masthead__home {
+  justify-self: start;
+  width: 11.75rem;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius);
+  background: transparent;
+  cursor: pointer;
+}
+
+.masthead__home:focus-visible {
+  outline: 2px solid var(--chrome-contrast);
+  outline-offset: 0.25rem;
+}
+
 .masthead__logo {
   display: block;
-  width: 11.75rem;
+  width: 100%;
   height: auto;
-  justify-self: start;
 }
 
 .masthead--entry {
   grid-template-columns: 1fr;
 }
 
-.masthead--entry .masthead__logo {
+.masthead--entry .masthead__logo,
+.masthead--entry .masthead__home {
   justify-self: center;
 }
 
@@ -39,7 +54,7 @@
     padding-inline: 1.25rem;
   }
 
-  .masthead__logo,
+  .masthead__home,
   .screen-overlay,
   .masthead__nav {
     justify-self: center;

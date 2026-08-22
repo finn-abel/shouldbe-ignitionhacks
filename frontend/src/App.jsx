@@ -114,7 +114,14 @@ export default function App() {
   return (
     <>
       <header className="masthead">
-        <img className="masthead__logo" src="/shouldbe-logo.svg" alt="ShouldBe" />
+        <button
+          type="button"
+          className="masthead__home"
+          aria-label="Go to dashboard"
+          onClick={() => chooseView('dashboard')}
+        >
+          <img className="masthead__logo" src="/shouldbe-logo.svg" alt="ShouldBe" />
+        </button>
         <nav className="screen-overlay" aria-label="Primary views">
           {PRIMARY_VIEWS.map(({ key, label }) => (
             <button
