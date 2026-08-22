@@ -1,26 +1,27 @@
+# Versions are pinned. A deploy that resolves "latest" is a deploy that can break on a
+# release you never made — which on a hackathon clock is unrecoverable.
+
 # --- core service ---
-fastapi
-uvicorn[standard]
-pydantic
-python-dotenv
+fastapi==0.141.1
+uvicorn[standard]==0.52.4
+pydantic==2.13.4
+python-dotenv==1.2.3
 
 # --- persistence (step 1) ---
-sqlalchemy
+sqlalchemy==2.0.52
+psycopg2-binary==2.9.11   # Postgres driver. Unused on SQLite; required on Render.
 
 # --- .ics parsing (step 4 / Door C) ---
-ics
+ics==0.7.3
 
 # --- tests ---
-pytest
-httpx          # FastAPI TestClient dependency
+pytest==9.1.1
+httpx==0.28.1          # FastAPI TestClient dependency
 
 # --- auth (step 11) ---
-authlib               # Google OAuth (openid email profile scopes only)
-itsdangerous          # signs the session cookie
+authlib==1.7.2         # Google OAuth (openid email profile scopes only)
+itsdangerous==2.2.0    # signs the session cookie
 
 # --- LLM scoring (step 12) ---
-openai                # default real scoring provider
-anthropic             # provider SDK; only used when SHOULDBE_USE_STUB is off
-
-# --- NOT YET USED — added in the step that needs them ---
-# postmarker            # Postmark in/outbound    (step 13)
+openai==3.3.1          # default real scoring provider
+anthropic==1.0.0       # provider SDK; only used when SHOULDBE_USE_STUB is off

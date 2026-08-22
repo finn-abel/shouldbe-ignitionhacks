@@ -122,19 +122,13 @@ No `PYTHONPATH=` prefix is needed for any of these — activating the venv and r
 
 ---
 
-## Before you deploy
+## Deploying
 
-Two settings that are correct locally and **wrong** in the cloud:
+Everything above is local. Deploying to Render is its own guide — [DEPLOY.md](DEPLOY.md).
 
-```bash
-SESSION_COOKIE_SAMESITE=none
-SESSION_COOKIE_SECURE=true
-```
-
-On localhost the dashboard and API count as the same site, so the default `lax` cookie is
-sent. On Render they are different hosts and the browser drops it on every cross-site call
-— leave the defaults and the deployed app answers 401 to everything, guest entry included,
-with nothing in the logs to explain it.
-
-Also set `FRONTEND_ORIGIN` and `FRONTEND_URL` to the deployed dashboard URL, and
-`VITE_API_BASE_URL` to the deployed API URL.
+The short version of the part that catches people: on localhost the dashboard and the API
+count as the same site, so the default `lax` session cookie is sent. On Render they are
+different hosts and the browser drops it on every cross-site call — leave the defaults and
+the deployed app answers 401 to everything, guest entry included, with nothing in the logs
+to explain it. `render.yaml` already sets `SESSION_COOKIE_SAMESITE=none` and
+`SESSION_COOKIE_SECURE=true`; don't undo them.

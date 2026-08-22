@@ -199,6 +199,30 @@ def seed():
         return guest.id
 
 
+def seed_if_empty():
+    """Seed only when the guest's ledger is empty. Returns the guest id, or None.
+
+    A brand-new Render Postgres is empty, and an empty dashboard is not a demo. This runs
+    on boot so the deployed app is populated without anyone shelling into the service —
+    but it refuses to run over an existing ledger, because a web service restarts for
+    reasons nobody chose (a deploy, a spin-down wake, an OOM) and wiping a judge's
+    just-analyzed meeting mid-demo would be worse than an empty dashboard ever was.
+
+    Use `python -m app.seed` for the deliberate, destructive reset.
+    """
+    init_db()
+
+    with SessionLocal() as session:
+        guest = get_or_create_guest(session)
+        already = session.execute(
+            select(Meeting.id).where(Meeting.user_id == guest.id).limit(1)
+        ).first()
+        if already:
+            return None
+
+    return seed()
+
+
 if __name__ == "__main__":
     guest_id = seed()
     print(f"Seeded the guest user (id={guest_id}) with {len(CURATED)} curated meetings.")
