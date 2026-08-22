@@ -10,6 +10,9 @@ drafts email alternatives.
 **Getting it running: [RUNBOOK.md](RUNBOOK.md)** — setup, commands, variables, and what to do
 when something breaks.
 
+**Getting it deployed: [DEPLOY.md](DEPLOY.md)** — Render blueprint, the cross-site cookie
+trap, and the optional keys.
+
 ## Layout
 
 ```
@@ -126,5 +129,5 @@ Both services read a local `.env` (git-ignored); `.env.example` is the committed
 **When you deploy**, set `SESSION_COOKIE_SAMESITE=none` and `SESSION_COOKIE_SECURE=true` on the
 backend. The frontend and API are the same site on localhost but not on Render, and a
 `SameSite=Lax` cookie is not sent cross-site — leave the defaults and every deployed API call
-answers 401.
+answers 401. [`render.yaml`](render.yaml) sets both; see [DEPLOY.md](DEPLOY.md).
 Full variable reference: `shouldbe-docs/shouldbe-04-dev-log.md`.

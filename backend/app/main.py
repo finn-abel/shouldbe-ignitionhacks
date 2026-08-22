@@ -16,6 +16,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from app.data.db import init_db
 from app.routes import analyze, auth, budget, inbound_route, meetings, tiers, webhook
+from app.seed import seed_if_empty
 from app.services.email import drain_outbox_in_new_session
 
 load_dotenv()
@@ -60,6 +61,18 @@ async def _drain_forever(interval: float):
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     init_db()
+
+    # A freshly provisioned Render Postgres is empty, and nobody demos an empty dashboard.
+    # Off by default so a local run is never surprised by rows it did not ask for; the
+    # seed itself declines to overwrite a ledger that already has meetings in it.
+    if _env_flag("SHOULDBE_SEED_ON_START", False):
+        try:
+            seeded = await asyncio.to_thread(seed_if_empty)
+            if seeded is not None:
+                logger.info("Seeded the guest user (id=%s) on an empty database.", seeded)
+        except Exception:
+            # A failed seed is a cosmetic problem; refusing to boot over it is not.
+            logger.exception("Startup seed failed; the app is starting with no demo data.")
 
     # Anything stranded by a restart between commit and send.
     try:

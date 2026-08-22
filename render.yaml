@@ -1,0 +1,127 @@
+# Render blueprint — the whole stack: Postgres, the API, and the dashboard.
+#
+# Deploy: Render Dashboard → New → Blueprint → pick this repo. Render reads this file and
+# creates all three services. Everything marked `sync: false` is asked for at creation
+# time (blank is fine) and is owned by the dashboard afterwards, so a later blueprint sync
+# never clobbers a secret.
+#
+# Two of them CANNOT be filled in on the first pass, because they are each other's URLs:
+# the API needs the dashboard's origin, the dashboard needs the API's. Deploy once, read
+# the two `.onrender.com` URLs off the dashboard, set them, redeploy. See DEPLOY.md.
+
+databases:
+  - name: shouldbe-db
+    databaseName: shouldbe
+    user: shouldbe
+    region: ohio
+    plan: basic-256mb # `free` also works, but expires after 30 days.
+    ipAllowList: [] # No external access — only Render services reach it.
+
+services:
+  # --- API (FastAPI on uvicorn) ---
+  - type: web
+    name: shouldbe-api
+    runtime: python
+    region: ohio
+    plan: starter # `free` spins down after 15 idle minutes; the first click then takes ~50s.
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    # --forwarded-allow-ips: uvicorn only trusts X-Forwarded-Proto from 127.0.0.1 by
+    # default, and Render's proxy is not localhost. Without this every request looks like
+    # plain http to the app, so the Google OAuth redirect_uri is built as http:// and
+    # Google rejects the sign-in with redirect_uri_mismatch.
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --forwarded-allow-ips="*"
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+
+      - key: DATABASE_URL
+        fromDatabase:
+          name: shouldbe-db
+          property: connectionString
+
+      # Signs the session cookie. Render generates it once and keeps it; regenerating it
+      # would log every existing session out.
+      - key: SESSION_SECRET
+        generateValue: true
+
+      # The dashboard and the API are different hosts here, so the session cookie is
+      # cross-site. `lax` (correct locally) is dropped by the browser on every API call
+      # and the whole app answers 401 with nothing in the logs to explain it.
+      - key: SESSION_COOKIE_SAMESITE
+        value: none
+      - key: SESSION_COOKIE_SECURE
+        value: "true"
+
+      # Fill both in after the first deploy: the static site's https URL, no trailing
+      # slash. FRONTEND_ORIGIN is the CORS allowlist; FRONTEND_URL is where OAuth returns.
+      - key: FRONTEND_ORIGIN
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+
+      - key: SHOULDBE_TIMEZONE
+        value: America/Toronto
+      - key: SHOULDBE_MAX_BILLABLE_MINUTES
+        value: "480"
+
+      # Populates the guest ledger on a brand-new database. It will not overwrite an
+      # existing one — see app/seed.py:seed_if_empty.
+      - key: SHOULDBE_SEED_ON_START
+        value: "1"
+
+      # 1 = offline heuristic stub. Flip to 0 once OPENAI_API_KEY is set, and flip it back
+      # if the provider misbehaves mid-demo — the stub is never removed.
+      - key: SHOULDBE_USE_STUB
+        value: "1"
+      - key: LLM_PROVIDER
+        value: openai
+      - key: OPENAI_MODEL
+        value: gpt-5-nano
+      - key: OPENAI_API_KEY
+        sync: false
+
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+
+      # Door A: Postmark receives invites, Resend sends replies. Independent of each
+      # other, and both optional — unset, invites still parse and replies queue.
+      - key: POSTMARK_TOKEN
+        sync: false
+      - key: POSTMARK_WEBHOOK_SECRET
+        sync: false
+      - key: SHOULDBE_INBOX
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: RESEND_FROM
+        sync: false
+      - key: OUTBOX_DRAIN_SECONDS
+        value: "120"
+
+  # --- Dashboard (Vite static build) ---
+  - type: web
+    name: shouldbe-web
+    runtime: static
+    rootDir: frontend
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist
+    # Vite inlines this at BUILD time, not run time — changing it requires a redeploy of
+    # this service, not just a restart. Set it to the API's https URL, no trailing slash.
+    envVars:
+      - key: VITE_API_BASE_URL
+        sync: false
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    headers:
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: Referrer-Policy
+        value: strict-origin-when-cross-origin
