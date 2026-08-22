@@ -34,6 +34,9 @@ export default function Entry({ onGuest, pending, error }) {
     <>
       <header className="masthead masthead--entry">
         <img className="masthead__logo" src="/shouldbe-logo.svg" alt="ShouldBe" />
+        <p className="masthead__slogan">
+          If it <em>Could Be</em> an email, it <em>Should Be</em> an email.
+        </p>
       </header>
 
       <main className="entry-page">

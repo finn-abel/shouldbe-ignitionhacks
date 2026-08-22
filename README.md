@@ -2,6 +2,10 @@
   <img src="frontend/public/shouldbe-logo.svg" alt="ShouldBe logo" width="260" />
 </p>
 
+<p align="center">
+  <em>If it <strong>Could Be</strong> an email, it <strong>Should Be</strong> an email.</em>
+</p>
+
 # ShouldBe
 
 [![CI](https://github.com/finn-abel/shouldbe-ignitionhacks/actions/workflows/ci.yml/badge.svg)](https://github.com/finn-abel/shouldbe-ignitionhacks/actions/workflows/ci.yml)
