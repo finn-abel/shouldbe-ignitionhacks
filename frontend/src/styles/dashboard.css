@@ -1718,3 +1718,16 @@
 /* The badge that used to share this row is gone, so the score no longer needs a
    column beside it. */
 .result__verdict--score-only { grid-template-columns: 1fr; }
+
+/* The People panel before anyone is in it — the state every account starts in. */
+.people-empty {
+  margin: 0;
+  padding: var(--gap-tight);
+  border: 1px dashed var(--rule-strong);
+  border-radius: var(--radius-card);
+  background: var(--paper-sunken);
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  text-wrap: pretty;
+}

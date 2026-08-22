@@ -41,11 +41,38 @@
 
 .masthead--entry {
   grid-template-columns: 1fr;
+  gap: 0.35rem;
+  padding-block: 1rem;
 }
 
 .masthead--entry .masthead__logo,
 .masthead--entry .masthead__home {
   justify-self: center;
+}
+
+/* Inside the app the logo is wrapped in `.masthead__home`, which caps it at 11.75rem.
+   The entry header has no such wrapper, so `width: 100%` resolved against the whole
+   masthead and the wordmark rendered the full width of the viewport. */
+.masthead--entry .masthead__logo {
+  width: 10.5rem;
+}
+
+.masthead__slogan {
+  justify-self: center;
+  margin: 0;
+  color: var(--chrome-muted);
+  font-size: var(--text-sm);
+  letter-spacing: 0.01em;
+  text-align: center;
+  text-wrap: balance;
+}
+
+/* The joke is the product name appearing twice, so those two phrases carry the colour
+   and the rest of the line stays quiet. */
+.masthead__slogan em {
+  color: var(--chrome-contrast);
+  font-style: normal;
+  font-weight: 640;
 }
 
 @media (max-width: 48rem) {
@@ -141,6 +168,13 @@
 
 .screens__page[aria-hidden='true'] {
   pointer-events: none;
+  /* The three views share one flex track, so without this the tallest of them sets the
+     height of all of them. Configuration is by far the tallest, which left roughly 900px
+     of empty page under the dashboard before the footer — a gap with nothing in it, on
+     the view people spend the most time on. Collapsing the off-screen pages lets the
+     track take the height of whichever view is actually showing. */
+  height: 0;
+  overflow: hidden;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -839,6 +873,33 @@
 .colophon__facts dd {
   margin: 0;
   color: var(--ink-faint);
+  line-height: 1.45;
+  text-wrap: pretty;
+}
+
+/* The panels carry real sentences now rather than one-line placeholders, so four equal
+   columns squeeze them into slivers below a wide desktop. */
+@media (max-width: 68rem) {
+  .colophon__facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.colophon__facts code {
+  font-family: var(--mono);
+  font-size: 0.95em;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+
+.colophon__facts a {
+  color: var(--brand);
+  text-decoration-color: color-mix(in oklch, var(--brand) 40%, transparent);
+  text-underline-offset: 0.15em;
+}
+
+.colophon__facts a:hover {
+  text-decoration-color: currentColor;
 }
 
 @media (max-width: 48rem) {

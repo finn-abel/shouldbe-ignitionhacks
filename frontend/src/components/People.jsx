@@ -242,6 +242,18 @@ export default function People({ onRepriced }) {
         </span>
       </div>
 
+      {/* The empty directory is the state every account starts in, and it is exactly
+          when `hasPeopleList` is false — so this is the other arm of that condition, not
+          a check nested inside it. Without it the panel is a heading, one row and a blank
+          form, which reads as broken rather than as new. */}
+      {!hasPeopleList && (
+        <p className="people-empty">
+          Nobody placed yet. Set your own role above, add a colleague below, or invite
+          ShouldBe to a meeting — every address on that invite shows up here waiting for a
+          role, and the ledger re-prices itself once you give them one.
+        </p>
+      )}
+
       {hasPeopleList && (
         <div className="people-list">
           <div
@@ -389,7 +401,13 @@ export default function People({ onRepriced }) {
           disabled={saving || !pending.length}
           onClick={save}
         >
-          {saving ? 'Saving…' : `Save ${pending.length || ''} role${pending.length === 1 ? '' : 's'}`}
+          {/* Counting only when there is something to count: interpolating an empty
+              count left the label reading "Save  roles", with the gap still in it. */}
+          {saving
+            ? 'Saving…'
+            : pending.length
+              ? `Save ${pending.length} role${pending.length === 1 ? '' : 's'}`
+              : 'Save roles'}
         </button>
         {status && <span className="settings__status" role="status">{status}</span>}
         {error && <span className="notice notice--error" role="alert">{error}</span>}

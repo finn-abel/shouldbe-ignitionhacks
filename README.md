@@ -2,6 +2,10 @@
   <img src="frontend/public/shouldbe-logo.svg" alt="ShouldBe logo" width="260" />
 </p>
 
+<p align="center">
+  <em>If it <strong>Could Be</strong> an email, it <strong>Should Be</strong> an email.</em>
+</p>
+
 # ShouldBe
 
 [![CI](https://github.com/finn-abel/shouldbe-ignitionhacks/actions/workflows/ci.yml/badge.svg)](https://github.com/finn-abel/shouldbe-ignitionhacks/actions/workflows/ci.yml)
@@ -14,6 +18,16 @@ low-necessity meetings, and tracks monthly meeting budgets by user, team, or dep
 Built for **Ignition Hacks V.7 · Fintech track**, ShouldBe moves beyond passive
 analytics: it gives teams a ledger of meeting spend, budget guardrails before new
 meetings are recorded, and a practical path to reclaim avoidable meeting costs.
+
+## Try it
+
+**→ [shouldbe-web.onrender.com](https://shouldbe-web.onrender.com)**
+
+No setup, no clone, no API key. Press **Continue as guest** and the dashboard opens on a
+pre-seeded ledger, already over budget, with the worst offender flagged. The guest account
+is real and writable — analyze a meeting, convert one to an email, and the figures move.
+
+The [local setup](#local-setup) below is for developing on it, not for seeing it.
 
 ## Product Overview
 
@@ -275,7 +289,20 @@ reasoning; the backend calculates the final score from a fixed weighted rubric:
 | Business impact | 10% |
 
 Scores from 1 to 4 are treated as meetings that could become email. Scores from 5 to 10
-are kept live. Ambiguous meetings are deliberately defended rather than over-flagged.
+are kept live.
+
+**Live time carries the burden of proof.** The rubric used to defend ambiguous meetings
+rather than over-flag them, which sounds cautious and is not: almost no real invite states
+why it needs to be live, so the ambiguous band covered most of the calendar and the tool
+agreed with nearly everything it was shown. The anchors now put the burden on the meeting
+— an invite giving no evidence its work needs live time has not made its case, and a vague
+or missing agenda counts against it. A score of 8 or above in a category has to be earned
+with something the invite actually says.
+
+Necessary meetings are still defended, but by being *recognised* as necessary rather than
+by a generous default. Conversations about a person — a 1:1, skip-level, career or
+performance discussion — score high on decision pressure on their face, because the
+absence of a decision is not evidence that writing would do the job.
 
 ## Budget Guardrails
 
