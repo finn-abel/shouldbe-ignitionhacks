@@ -1,0 +1,108 @@
+"""`ParsedInvite` and the manual-form input that produces one (doc 2 §3.5).
+
+Every door — the manual form, an emailed .ics, a saved .ics — is a thin adapter whose only
+job is to produce a `ParsedInvite` (doc 2 §1). `analyze()` never learns which door it came
+through, so the mapping from a door's own shape into this one lives with the schemas.
+"""
+
+from datetime import datetime
+
+from pydantic import BaseModel, Field, field_validator, model_validator
+
+from app.enums import Tier
+from app.services.costing import OCCURRENCES_PER_YEAR
+
+DEFAULT_DURATION_MINUTES = 60
+
+
+def normalised_recurrence(is_recurring: bool, recurrence_freq: str | None) -> str | None:
+    """Validate and upper-case a recurrence, or clear it for a one-off meeting.
+
+    `annualized_cost` refuses to guess at a frequency it cannot read, so every door checks
+    it here first. Both schemas below run this: `ManualMeetingInput` is the HTTP boundary,
+    where a failure must surface as a 422 rather than a 500, and `ParsedInvite` is the
+    boundary the other two doors come through.
+    """
+    if not is_recurring:
+        return None
+
+    if not recurrence_freq or not recurrence_freq.strip():
+        raise ValueError("recurrence_freq is required when is_recurring is true.")
+
+    freq = recurrence_freq.strip().upper()
+    if freq not in OCCURRENCES_PER_YEAR:
+        known = ", ".join(OCCURRENCES_PER_YEAR)
+        raise ValueError(f"recurrence_freq must be one of: {known}.")
+    return freq
+
+
+class ParsedInvite(BaseModel):
+    """What every door produces and the pipeline consumes."""
+
+    title: str = Field(min_length=1, max_length=512)
+    description: str = ""
+    start: datetime | None = None
+    duration_minutes: int = Field(default=DEFAULT_DURATION_MINUTES, ge=0)
+    attendee_tiers: list[Tier] = Field(default_factory=list)
+    organizer_email: str = ""
+    is_recurring: bool = False
+    recurrence_freq: str | None = None
+
+    @property
+    def attendee_count(self) -> int:
+        """One entry per attendee, so the tier list is the head count (see step 2)."""
+        return len(self.attendee_tiers)
+
+    @model_validator(mode="after")
+    def _check_recurrence(self):
+        object.__setattr__(
+            self, "recurrence_freq", normalised_recurrence(self.is_recurring, self.recurrence_freq)
+        )
+        return self
+
+
+class ManualMeetingInput(BaseModel):
+    """Door B — the dashboard form (doc 2 §5.1).
+
+    Attendees arrive as a head count per role tier rather than one entry each: it is what
+    a form can reasonably ask for, and it makes the demo's "change 3 attendees to 10"
+    a single number to edit.
+    """
+
+    title: str = Field(min_length=1, max_length=512)
+    description: str = ""
+    start: datetime | None = None
+    duration_minutes: int = Field(default=DEFAULT_DURATION_MINUTES, ge=0, le=24 * 60)
+    attendees: dict[Tier, int] = Field(default_factory=dict)
+    organizer_email: str = ""
+    is_recurring: bool = False
+    recurrence_freq: str | None = None
+
+    @field_validator("attendees")
+    @classmethod
+    def _no_negative_head_counts(cls, value: dict[Tier, int]) -> dict[Tier, int]:
+        for tier, count in value.items():
+            if count < 0:
+                raise ValueError(f"Attendee count for {tier.value!r} must not be negative.")
+        return value
+
+    @model_validator(mode="after")
+    def _check_recurrence(self):
+        object.__setattr__(
+            self, "recurrence_freq", normalised_recurrence(self.is_recurring, self.recurrence_freq)
+        )
+        return self
+
+    def to_parsed_invite(self) -> ParsedInvite:
+        """Door B's adapter: expand the per-tier counts into one entry per attendee."""
+        tiers = [tier for tier, count in self.attendees.items() for _ in range(count)]
+        return ParsedInvite(
+            title=self.title,
+            description=self.description,
+            start=self.start,
+            duration_minutes=self.duration_minutes,
+            attendee_tiers=tiers,
+            organizer_email=self.organizer_email,
+            is_recurring=self.is_recurring,
+            recurrence_freq=self.recurrence_freq,
+        )
