@@ -32,6 +32,10 @@
   border-block-color: color-mix(in oklch, var(--leak) 34%, var(--rule));
 }
 
+.dashboard-hero--warn {
+  border-block-color: color-mix(in oklch, var(--accent) 38%, var(--rule));
+}
+
 .headline {
   display: flex;
   flex-direction: column;
@@ -42,6 +46,7 @@
 }
 
 .headline--over { border-left-color: var(--leak); }
+.dashboard-hero--warn .headline { border-left-color: var(--accent); }
 
 .headline__figure {
   margin: 0;
@@ -69,6 +74,54 @@
   background: var(--paper-sunken);
   color: var(--ink-soft);
   font-size: var(--text-xs);
+}
+
+.headline__remaining {
+  margin: 0.25rem 0 0;
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+}
+
+.headline__remaining strong {
+  color: var(--ink);
+}
+
+.budget-meter {
+  position: relative;
+  width: min(100%, 28rem);
+  height: 1.55rem;
+  margin-top: 0.4rem;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--paper-sunken);
+  overflow: hidden;
+}
+
+.budget-meter__fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: calc(var(--budget-usage) * 1%);
+  background: linear-gradient(90deg, var(--defend), var(--accent) 80%, var(--leak));
+}
+
+.budget-meter__mark {
+  position: absolute;
+  inset-block: 0;
+  left: calc(var(--budget-mark) * 1%);
+  display: flex;
+  align-items: center;
+  padding-left: 0.25rem;
+  border-left: 1px solid color-mix(in oklch, var(--ink) 45%, transparent);
+  color: var(--ink);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  transform: translateX(-1px);
+}
+
+.budget-meter__mark:last-child {
+  padding-right: 0.25rem;
+  padding-left: 0;
+  transform: translateX(calc(-100% + 1px));
 }
 
 .dashboard-signals {
@@ -714,6 +767,58 @@
 .money-input .field__input { width: 9rem; }
 .money-input--compact .field__input { width: 6.4rem; }
 
+.budget-rows {
+  display: grid;
+  gap: 1px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-card);
+  overflow: hidden;
+  background: var(--rule);
+}
+
+.budget-row {
+  display: grid;
+  grid-template-columns: minmax(12rem, 1fr) minmax(10rem, 12rem) 6.25rem;
+  align-items: end;
+  gap: var(--gap-tight);
+  padding: var(--gap-tight);
+  background: var(--paper-raised);
+}
+
+.budget-row__name .field__input {
+  max-width: none;
+}
+
+.budget-row__name .field__input:disabled {
+  color: var(--ink-faint);
+  opacity: 1;
+}
+
+.budget-row__amount .money-input .field__input {
+  width: 8.5rem;
+}
+
+.scope-action {
+  width: 100%;
+  min-height: 2.35rem;
+  padding: 0 0.8rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--paper-sunken);
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 620;
+  cursor: pointer;
+  transition: background var(--duration) var(--ease), color var(--duration) var(--ease);
+}
+
+.scope-action[aria-pressed='true'] {
+  border-color: var(--brand);
+  background: var(--brand);
+  color: var(--brand-contrast);
+}
+
 .settings__basis {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -771,13 +876,15 @@
 .reference-action:hover { transform: translateY(-1px); }
 
 .settings__privacy {
+  width: 100%;
+  box-sizing: border-box;
   margin: 0;
   padding: var(--gap-tight);
   border-left: 2px solid var(--defend);
   background: var(--defend-wash);
   color: var(--ink-soft);
   font-size: var(--text-sm);
-  max-width: 60ch;
+  max-width: none;
 }
 
 .settings__privacy strong { color: var(--ink); }
@@ -859,21 +966,27 @@
 .settings__status { color: var(--defend); font-size: var(--text-sm); }
 
 .settings__theme {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(18rem, 24rem);
+  align-items: center;
+  gap: var(--gap);
   max-width: none;
 }
 
 .theme-switch {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  width: min(100%, 20rem);
-  padding: 0.2rem;
+  width: 100%;
+  gap: 0.3rem;
+  padding: 0.3rem;
   border: 1px solid var(--rule-strong);
   border-radius: var(--radius-card);
   background: var(--paper-sunken);
 }
 
 .theme-switch__option {
-  min-height: 2.2rem;
+  min-height: 2.45rem;
+  padding-inline: 1rem;
   border: 0;
   border-radius: var(--radius);
   background: transparent;
@@ -898,6 +1011,7 @@
 @media (max-width: 66rem) {
   .settings-command,
   .settings-grid,
+  .settings__theme,
   .settings__basis {
     grid-template-columns: 1fr;
   }
@@ -923,6 +1037,15 @@
 
   .rate {
     grid-template-columns: 1fr;
+  }
+
+  .budget-row {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .budget-row__amount .money-input .field__input {
+    width: 100%;
   }
 
   .settings__actions {

@@ -16,6 +16,14 @@ class Tier(Enum):
     EXEC = "exec"
 
 
+class BudgetScope(Enum):
+    """Where a meeting's spend is counted for guardrails."""
+
+    USER = "user"
+    TEAM = "team"
+    DEPARTMENT = "department"
+
+
 class Verdict(Enum):
     """Necessity call (doc 2 §4.4). KEEP = genuine live need; EMAIL = could be async."""
 

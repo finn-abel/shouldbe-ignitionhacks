@@ -9,7 +9,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from app.enums import Tier
+from app.enums import BudgetScope, Tier
 from app.services.costing import OCCURRENCES_PER_YEAR
 
 DEFAULT_DURATION_MINUTES = 60
@@ -47,6 +47,8 @@ class ParsedInvite(BaseModel):
     organizer_email: str = ""
     is_recurring: bool = False
     recurrence_freq: str | None = None
+    budget_scope_type: BudgetScope = BudgetScope.USER
+    budget_scope_name: str = "Personal"
 
     @property
     def attendee_count(self) -> int:
@@ -77,6 +79,8 @@ class ManualMeetingInput(BaseModel):
     organizer_email: str = ""
     is_recurring: bool = False
     recurrence_freq: str | None = None
+    budget_scope_type: BudgetScope = BudgetScope.USER
+    budget_scope_name: str = Field(default="Personal", min_length=1, max_length=255)
 
     @field_validator("attendees")
     @classmethod
@@ -105,4 +109,6 @@ class ManualMeetingInput(BaseModel):
             organizer_email=self.organizer_email,
             is_recurring=self.is_recurring,
             recurrence_freq=self.recurrence_freq,
+            budget_scope_type=self.budget_scope_type,
+            budget_scope_name=self.budget_scope_name,
         )

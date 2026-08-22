@@ -7,7 +7,7 @@ the cloud are the same code path — a config change, not a code change.
 import os
 
 from dotenv import load_dotenv
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
 load_dotenv()
@@ -63,3 +63,25 @@ def init_db():
     from app.data import models  # noqa: F401  (import registers the mappings)
 
     Base.metadata.create_all(bind=engine)
+    _add_missing_meeting_scope_columns()
+
+
+def _add_missing_meeting_scope_columns():
+    """Add new nullable meeting scope columns for databases created before guardrails."""
+    inspector = inspect(engine)
+    if not inspector.has_table("meetings"):
+        return
+
+    columns = {column["name"] for column in inspector.get_columns("meetings")}
+    statements = []
+    if "budget_scope_type" not in columns:
+        statements.append("ALTER TABLE meetings ADD COLUMN budget_scope_type VARCHAR(32)")
+    if "budget_scope_name" not in columns:
+        statements.append("ALTER TABLE meetings ADD COLUMN budget_scope_name VARCHAR(255)")
+
+    if not statements:
+        return
+
+    with engine.begin() as connection:
+        for statement in statements:
+            connection.execute(text(statement))

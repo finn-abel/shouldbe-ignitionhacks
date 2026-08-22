@@ -37,9 +37,43 @@ const TIERS = [
 const FEDERAL_REFERENCE_RATES = Object.fromEntries(TIERS.map(({ key, rate }) => [key, rate]));
 const LEGACY_PLACEHOLDER_RATES = { ic: '75', senior: '110', manager: '150', exec: '250' };
 const FEDERAL_HOURS = '1,950 hrs/year';
+const BUDGET_SCOPES = [
+  { key: 'user', label: 'User', defaultName: 'Personal' },
+  { key: 'team', label: 'Team', defaultName: 'Team' },
+  { key: 'department', label: 'Department', defaultName: 'Department' },
+];
+
+const EMPTY_BUDGETS = Object.fromEntries(
+  BUDGET_SCOPES.map(({ key, defaultName }) => [
+    key,
+    { scope_type: key, scope_name: defaultName, monthly_amount: '' },
+  ]),
+);
 
 const isLegacyPlaceholderRates = (loadedRates) =>
   TIERS.every(({ key }) => Number(loadedRates[key]) === Number(LEGACY_PLACEHOLDER_RATES[key]));
+
+function readBudgetConfig(loadedBudget) {
+  const next = {
+    user: { ...EMPTY_BUDGETS.user, monthly_amount: loadedBudget.monthly_amount ?? '' },
+    team: { ...EMPTY_BUDGETS.team },
+    department: { ...EMPTY_BUDGETS.department },
+  };
+
+  for (const budget of loadedBudget.budgets ?? []) {
+    if (!next[budget.scope_type]) continue;
+    next[budget.scope_type] = {
+      scope_type: budget.scope_type,
+      scope_name: budget.scope_name,
+      monthly_amount: budget.monthly_amount ?? '',
+    };
+  }
+
+  return {
+    budgets: next,
+    activeScope: loadedBudget.active_scope_type ?? 'user',
+  };
+}
 
 /**
  * The cost basis and the budget (doc 2 §4.2, §4.3).
@@ -48,7 +82,8 @@ const isLegacyPlaceholderRates = (loadedRates) =>
  */
 export default function Settings({ theme, onThemeChange, onSaved }) {
   const [rates, setRates] = useState(null);
-  const [budget, setBudget] = useState('');
+  const [budgets, setBudgets] = useState(EMPTY_BUDGETS);
+  const [activeScope, setActiveScope] = useState('user');
   const [status, setStatus] = useState(null);
   const [error, setError] = useState(null);
 
@@ -62,7 +97,9 @@ export default function Settings({ theme, onThemeChange, onSaved }) {
         } else {
           setRates(loadedRates);
         }
-        setBudget(loadedBudget.monthly_amount ?? '');
+        const config = readBudgetConfig(loadedBudget);
+        setBudgets(config.budgets);
+        setActiveScope(config.activeScope);
       } catch (failure) {
         setError(failure.message);
       }
@@ -83,6 +120,13 @@ export default function Settings({ theme, onThemeChange, onSaved }) {
     setStatus('Federal reference rates loaded. Save settings to apply.');
   };
 
+  const setBudgetField = (scope, key, value) => {
+    setBudgets((prev) => ({
+      ...prev,
+      [scope]: { ...prev[scope], [key]: value },
+    }));
+  };
+
   const save = async (event) => {
     event.preventDefault();
     setError(null);
@@ -96,23 +140,44 @@ export default function Settings({ theme, onThemeChange, onSaved }) {
       return;
     }
 
-    // A blank budget means "not set", which is a different thing from a budget of zero:
-    // zero cannot be exceeded by a percentage and reads as permanently over budget. Leave
-    // it alone rather than writing a number the user never typed.
-    const monthlyAmount = amountOf(budget);
-    if (String(budget ?? '').trim() !== '' && monthlyAmount === null) {
-      setError('The monthly budget must be a positive amount.');
+    const invalidBudget = BUDGET_SCOPES.find(({ key }) => {
+      const row = budgets[key] ?? EMPTY_BUDGETS[key];
+      return String(row.monthly_amount ?? '').trim() !== '' && amountOf(row.monthly_amount) === null;
+    });
+    if (invalidBudget) {
+      const row = budgets[invalidBudget.key] ?? EMPTY_BUDGETS[invalidBudget.key];
+      setError(`${row.scope_name || invalidBudget.defaultName} budget must be a positive amount.`);
       return;
     }
+
+    const budgetRows = BUDGET_SCOPES.map(({ key, defaultName }) => {
+      const row = budgets[key] ?? EMPTY_BUDGETS[key];
+      const amount = amountOf(row.monthly_amount);
+      return {
+        scope_type: key,
+        scope_name: String(row.scope_name || defaultName).trim(),
+        monthly_amount: amount,
+        is_active: activeScope === key,
+      };
+    });
 
     try {
       const savedRates = await updateTierRates(
         Object.fromEntries(TIERS.map(({ key }) => [key, amountOf(rates[key])])),
       );
-      if (monthlyAmount !== null) await updateBudget(monthlyAmount);
+      const activeBudget = budgetRows.find((row) => row.scope_type === activeScope) ?? budgetRows[0];
+      const savedBudget = await updateBudget({
+        active_scope_type: activeBudget.scope_type,
+        active_scope_name: activeBudget.scope_name,
+        monthly_amount: budgetRows.find((row) => row.scope_type === 'user')?.monthly_amount ?? null,
+        budgets: budgetRows,
+      });
 
       setRates(savedRates);
-      setStatus(monthlyAmount === null ? 'Rates saved. No budget set.' : 'Saved.');
+      const config = readBudgetConfig(savedBudget);
+      setBudgets(config.budgets);
+      setActiveScope(config.activeScope);
+      setStatus('Saved.');
       onSaved?.();
     } catch (failure) {
       setError(failure.message);
@@ -123,8 +188,10 @@ export default function Settings({ theme, onThemeChange, onSaved }) {
   if (!rates) return <p className="dashboard__loading">Loading settings…</p>;
 
   const blendedHour = TIERS.reduce((sum, { key }) => sum + (Number(rates[key]) || 0), 0);
-  const monthlyAmount = amountOf(budget);
-  const budgetLabel = String(budget ?? '').trim() === '' ? 'Unset' : formatMoney(monthlyAmount);
+  const activeBudget = budgets[activeScope] ?? EMPTY_BUDGETS.user;
+  const activeAmount = amountOf(activeBudget.monthly_amount);
+  const budgetLabel =
+    String(activeBudget.monthly_amount ?? '').trim() === '' ? 'Unset' : formatMoney(activeAmount);
 
   return (
     <form className="settings" onSubmit={save} noValidate>
@@ -143,7 +210,7 @@ export default function Settings({ theme, onThemeChange, onSaved }) {
             <dd>{theme === 'dark' ? 'Dark' : 'Light'}</dd>
           </div>
           <div>
-            <dt>Budget</dt>
+            <dt>Guardrail</dt>
             <dd className="figure">{budgetLabel}</dd>
           </div>
           <div>
@@ -153,56 +220,57 @@ export default function Settings({ theme, onThemeChange, onSaved }) {
         </dl>
       </header>
 
-      <div className="settings-grid">
-        <section className="panel panel--surface settings__theme">
-          <div className="panel__head">
-            <h2>Appearance</h2>
-          </div>
-          <div className="theme-switch" role="group" aria-label="Theme">
-            <button
-              type="button"
-              className="theme-switch__option"
-              aria-pressed={theme === 'light'}
-              onClick={() => onThemeChange('light')}
-            >
-              Light
-            </button>
-            <button
-              type="button"
-              className="theme-switch__option"
-              aria-pressed={theme === 'dark'}
-              onClick={() => onThemeChange('dark')}
-            >
-              Dark
-            </button>
-          </div>
-        </section>
-
-        <section className="panel panel--surface settings__budget">
-          <div className="panel__head">
-            <h2>Monthly meeting budget</h2>
-          </div>
-          <label className="field">
-            <span className="field__label">
-              What this team should spend on meetings each month
-              <span className="field__hint">leave blank for no budget</span>
-            </span>
-            <div className="money-input">
-              <span aria-hidden="true">$</span>
-              <input
-                className="field__input figure"
-                type="number"
-                min="0"
-                step="0.01"
-                inputMode="decimal"
-                value={budget}
-                onChange={(event) => setBudget(event.target.value)}
-                aria-label="Monthly meeting budget in dollars"
-              />
-            </div>
-          </label>
-        </section>
-      </div>
+      <section className="panel panel--surface settings__budget">
+        <div className="panel__head">
+          <h2>Monthly meeting budgets</h2>
+        </div>
+        <div className="budget-rows">
+          {BUDGET_SCOPES.map(({ key, label, defaultName }) => {
+            const row = budgets[key] ?? EMPTY_BUDGETS[key];
+            return (
+              <div className="budget-row" key={key}>
+                <label className="field budget-row__name">
+                  <span className="field__label">{label}</span>
+                  <input
+                    className="field__input"
+                    value={row.scope_name}
+                    disabled={key === 'user'}
+                    onChange={(event) => setBudgetField(key, 'scope_name', event.target.value)}
+                    placeholder={defaultName}
+                    aria-label={`${label} budget name`}
+                  />
+                </label>
+                <label className="field budget-row__amount">
+                  <span className="field__label">Monthly</span>
+                  <div className="money-input">
+                    <span aria-hidden="true">$</span>
+                    <input
+                      className="field__input figure"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      inputMode="decimal"
+                      value={row.monthly_amount}
+                      onChange={(event) =>
+                        setBudgetField(key, 'monthly_amount', event.target.value)
+                      }
+                      aria-label={`${label} monthly meeting budget in dollars`}
+                    />
+                  </div>
+                </label>
+                <button
+                  type="button"
+                  className="scope-action"
+                  aria-pressed={activeScope === key}
+                  onClick={() => setActiveScope(key)}
+                >
+                  Active
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </section>
 
       <section className="panel panel--surface settings__rates">
         <div className="panel__head">
@@ -285,6 +353,30 @@ export default function Settings({ theme, onThemeChange, onSaved }) {
       </section>
 
       <EmailDoor />
+
+      <section className="panel panel--surface settings__theme">
+        <div className="panel__head">
+          <h2>Appearance</h2>
+        </div>
+        <div className="theme-switch" role="group" aria-label="Theme">
+          <button
+            type="button"
+            className="theme-switch__option"
+            aria-pressed={theme === 'light'}
+            onClick={() => onThemeChange('light')}
+          >
+            Light
+          </button>
+          <button
+            type="button"
+            className="theme-switch__option"
+            aria-pressed={theme === 'dark'}
+            onClick={() => onThemeChange('dark')}
+          >
+            Dark
+          </button>
+        </div>
+      </section>
 
       {error && <p className="notice notice--error" role="alert">{error}</p>}
 
