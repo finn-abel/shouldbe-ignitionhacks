@@ -149,3 +149,9 @@ venv/
 .venv/
 *.db
 .DS_Store
+
+# Python (this file started as a Node-only template)
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/

@@ -5,18 +5,31 @@ module does any work beyond assembling the app.
 """
 
 import os
+from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.data.db import init_db
 from app.routes import analyze, auth, budget, meetings, tiers, webhook
 
 load_dotenv()
 
 DEFAULT_FRONTEND_ORIGIN = "http://localhost:5173"
 
-app = FastAPI(title="ShouldBe", description="Meeting spend management.")
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    init_db()
+    yield
+
+
+app = FastAPI(
+    title="ShouldBe",
+    description="Meeting spend management.",
+    lifespan=lifespan,
+)
 
 app.add_middleware(
     CORSMiddleware,

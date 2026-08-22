@@ -1,0 +1,177 @@
+"""ORM entities exactly per doc 2 §4, plus the shared enums the services layer imports.
+
+Layering runs routes -> services -> data (doc 2 §3.1), so services importing these enum
+definitions goes with the grain. The enums carry no persistence behaviour of their own.
+"""
+
+from datetime import datetime, timezone
+from enum import Enum
+
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    DateTime,
+    Enum as SAEnum,
+    ForeignKey,
+    Integer,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+)
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from app.data.db import Base
+
+# Money is stored at cent precision. Postgres enforces this; SQLite is lax about it
+# (doc 4 task 4-B) — keep the column type authoritative rather than the dialect.
+MONEY = Numeric(12, 2)
+
+DEFAULT_DURATION_MINUTES = 60
+
+
+class Tier(Enum):
+    """Role tier — the privacy-preserving cost basis (doc 2 §4.2)."""
+
+    IC = "ic"
+    SENIOR = "senior"
+    MANAGER = "manager"
+    EXEC = "exec"
+
+
+class Verdict(Enum):
+    """Necessity call (doc 2 §4.4). KEEP = genuine live need; EMAIL = could be async."""
+
+    KEEP = "keep"
+    EMAIL = "email"
+
+
+class Status(Enum):
+    """Lifecycle / money state (doc 2 §6).
+
+    ANALYZED  — default; the meeting is on the books as spend.
+    HELD      — explicitly kept, whether necessary or unnecessary-but-not-converted.
+    CONVERTED — swapped for an email; contributes to reclaimed savings, not spend.
+    """
+
+    ANALYZED = "analyzed"
+    HELD = "held"
+    CONVERTED = "converted"
+
+
+def _enum_column(enum_cls, **kwargs):
+    """Portable enum column: VARCHAR + CHECK, storing the lowercase member *values*.
+
+    Avoids Postgres native ENUM types, which need a migration to gain a value, and keeps
+    the stored strings identical to the ones doc 2 §4 names.
+    """
+    return mapped_column(
+        SAEnum(
+            enum_cls,
+            native_enum=False,
+            values_callable=lambda e: [member.value for member in e],
+        ),
+        **kwargs,
+    )
+
+
+def _utcnow():
+    return datetime.now(timezone.utc)
+
+
+class User(Base):
+    """The account. Real sign-ins and the single shared guest are both rows here (§4.1)."""
+
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    email: Mapped[str] = mapped_column(String(320), unique=True, nullable=False)
+    display_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    google_sub: Mapped[str | None] = mapped_column(String(255), nullable=True, unique=True)
+    is_guest: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow
+    )
+
+    tier_rates: Mapped[list["RoleTierRate"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+    budget: Mapped["Budget | None"] = relationship(
+        back_populates="user", cascade="all, delete-orphan", uselist=False
+    )
+    meetings: Mapped[list["Meeting"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+
+
+class RoleTierRate(Base):
+    """Blended hourly rate for one role tier — never an individual salary (§4.2)."""
+
+    __tablename__ = "role_tier_rates"
+    __table_args__ = (UniqueConstraint("user_id", "tier", name="uq_tier_rate_per_user"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    tier: Mapped[Tier] = _enum_column(Tier, nullable=False)
+    hourly_rate: Mapped[float] = mapped_column(MONEY, nullable=False)
+
+    user: Mapped[User] = relationship(back_populates="tier_rates")
+
+
+class Budget(Base):
+    """One org-wide monthly meeting budget per user (§4.3)."""
+
+    __tablename__ = "budgets"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id"), nullable=False, unique=True, index=True
+    )
+    monthly_amount: Mapped[float] = mapped_column(MONEY, nullable=False)
+
+    user: Mapped[User] = relationship(back_populates="budget")
+
+
+class Meeting(Base):
+    """The analysis record — every analyzed meeting from any door (§4.4).
+
+    Meetings judged necessary are recorded too: the ledger tracks all meeting spend, and
+    the verdict is an attribute of the transaction, not a filter on what gets written.
+    """
+
+    __tablename__ = "meetings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+
+    # --- invite facts (populated by whichever door's adapter) ---
+    title: Mapped[str] = mapped_column(String(512), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    start: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    duration_minutes: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=DEFAULT_DURATION_MINUTES
+    )
+    attendee_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    attendee_tiers: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    organizer_email: Mapped[str] = mapped_column(String(320), nullable=False)
+    is_recurring: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    recurrence_freq: Mapped[str | None] = mapped_column(String(32), nullable=True)
+
+    # --- computed financials ---
+    cost: Mapped[float] = mapped_column(MONEY, nullable=False)
+    annualized_cost: Mapped[float | None] = mapped_column(MONEY, nullable=True)
+
+    # --- AI output ---
+    score: Mapped[int] = mapped_column(Integer, nullable=False)
+    verdict: Mapped[Verdict] = _enum_column(Verdict, nullable=False)
+    reasoning: Mapped[str] = mapped_column(Text, nullable=False)
+    alternative_email: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # --- lifecycle / money state ---
+    status: Mapped[Status] = _enum_column(Status, nullable=False, default=Status.ANALYZED)
+    reclaimed_savings: Mapped[float] = mapped_column(MONEY, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow, index=True
+    )
+
+    user: Mapped[User] = relationship(back_populates="meetings")

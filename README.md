@@ -52,6 +52,8 @@ Use `localhost`, not `127.0.0.1` — the Vite dev server binds IPv6 loopback.
 cd backend && ./venv/bin/pytest
 ```
 
+One-off scripts against the app package need the same path: `PYTHONPATH=. ./venv/bin/python script.py`.
+
 ## Environment
 
 Both services read a local `.env` (git-ignored); `.env.example` is the committed template.
