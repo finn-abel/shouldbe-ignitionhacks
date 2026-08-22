@@ -75,6 +75,18 @@ SHOULDBE_USE_STUB=0 ./venv/bin/uvicorn app.main:app --reload --port 8000
 
 If the provider errors mid-demo, set `SHOULDBE_USE_STUB=1` and restart — the stub is never removed.
 
+## Door A — invite ShouldBe to a meeting
+
+Set `POSTMARK_TOKEN`, `POSTMARK_FROM`, `SHOULDBE_INBOX` and `POSTMARK_WEBHOOK_SECRET`, then point
+the Postmark inbound stream at `POST /webhook/inbound-email?token=<secret>`. Without Postmark
+configured the webhook still parses, scores and records the invite — it just skips the reply.
+
+To exercise the same path from a saved `.ics` with no email at all:
+
+```bash
+cd backend && PYTHONPATH=. ./venv/bin/python -m app.services.ics_adapter invite.ics you@yourdomain
+```
+
 ## Environment
 
 Both services read a local `.env` (git-ignored); `.env.example` is the committed template.
