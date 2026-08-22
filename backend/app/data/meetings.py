@@ -9,7 +9,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.data.models import Meeting
+from app.enums import Status, Verdict
 from app.schemas.api import MeetingAnalysis
+from app.services.money import reclaimed_by_converting
 
 
 def save_analysis(session: Session, user_id: int, analysis: MeetingAnalysis) -> Meeting:
@@ -57,3 +59,29 @@ def get_meeting(session: Session, user_id: int, meeting_id: int) -> Meeting | No
     return session.scalar(
         select(Meeting).where(Meeting.id == meeting_id, Meeting.user_id == user_id)
     )
+
+
+class NotConvertible(Exception):
+    """Raised when a meeting cannot be swapped for an email."""
+
+
+def convert_meeting(session: Session, user_id: int, meeting_id: int) -> Meeting | None:
+    """Swap a flagged meeting for its drafted email (doc 2 §5.4).
+
+    Returns None if the meeting does not exist or belongs to someone else. Converting an
+    already-converted meeting is a no-op, so a double click cannot inflate savings.
+    """
+    meeting = get_meeting(session, user_id, meeting_id)
+    if meeting is None:
+        return None
+
+    if meeting.verdict is not Verdict.EMAIL:
+        raise NotConvertible(
+            "Only meetings flagged as avoidable can be converted to an email."
+        )
+
+    meeting.status = Status.CONVERTED
+    meeting.reclaimed_savings = reclaimed_by_converting(meeting.cost)
+    session.commit()
+    session.refresh(meeting)
+    return meeting

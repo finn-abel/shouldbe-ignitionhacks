@@ -112,3 +112,21 @@ class TierRates(RootModel[dict[Tier, Decimal]]):
             if rate < 0:
                 raise ValueError(f"The {tier.value} rate must not be negative.")
         return rates
+
+
+class MeetingStatusUpdate(BaseModel):
+    """The convert transition (doc 2 §5.4). Only `converted` is offered by this step."""
+
+    status: Status
+
+    @field_validator("status")
+    @classmethod
+    def _only_converted(cls, value: Status) -> Status:
+        # Literal[Status.CONVERTED] would not accept the JSON string "converted", since
+        # Status is a plain Enum rather than a str-Enum. Coerce, then check.
+        if value is not Status.CONVERTED:
+            raise ValueError(
+                f"Only a change to {Status.CONVERTED.value!r} is supported here, "
+                f"got {value.value!r}."
+            )
+        return value

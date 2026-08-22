@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import BurnRateChart from './BurnRateChart.jsx';
 import Ledger from './Ledger.jsx';
-import { getStats, listMeetings } from '../api/client.js';
+import { convertMeeting, getStats, listMeetings } from '../api/client.js';
 import { formatMoney, formatMoneyExact } from '../lib/format.js';
 
 const BUCKETS = ['day', 'week'];
@@ -17,6 +17,7 @@ export default function Dashboard({ refreshKey }) {
   const [bucket, setBucket] = useState('day');
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
+  const [converting, setConverting] = useState(null);
 
   const load = useCallback(async () => {
     try {
@@ -31,6 +32,52 @@ export default function Dashboard({ refreshKey }) {
   useEffect(() => {
     load();
   }, [load, refreshKey]);
+
+  /**
+   * Convert a flagged meeting (doc 2 §5.4). The row and the three affected figures move
+   * at once so the action feels instant, then the server's own numbers replace them —
+   * this is a local nudge to already-derived totals, never a re-derivation of the money
+   * model in the browser. On failure the snapshot goes back and the error is shown.
+   */
+  const convert = async (meeting) => {
+    const snapshot = data;
+    const cost = Number(meeting.cost);
+    setConverting(meeting.id);
+    setError(null);
+
+    setData((current) => ({
+      meetings: current.meetings.map((row) =>
+        row.id === meeting.id
+          ? { ...row, status: 'converted', reclaimed_savings: meeting.cost }
+          : row,
+      ),
+      stats: {
+        ...current.stats,
+        total_spend: Number(current.stats.total_spend) - cost,
+        avoidable_spend: Number(current.stats.avoidable_spend) - cost,
+        reclaimed_savings: Number(current.stats.reclaimed_savings) + cost,
+        spend_over_time: current.stats.spend_over_time.map((point) =>
+          point.period === meeting.created_at.slice(0, 10)
+            ? { ...point, amount: Number(point.amount) - cost }
+            : point,
+        ),
+        budget: {
+          ...current.stats.budget,
+          month_spend: Number(current.stats.budget.month_spend) - cost,
+        },
+      },
+    }));
+
+    try {
+      await convertMeeting(meeting.id);
+      await load();
+    } catch (failure) {
+      setData(snapshot);
+      setError(failure.message);
+    } finally {
+      setConverting(null);
+    }
+  };
 
   if (error) return <p className="notice notice--error" role="alert">{error}</p>;
   if (!data) return <p className="dashboard__loading">Reading the ledger…</p>;
@@ -101,7 +148,7 @@ export default function Dashboard({ refreshKey }) {
           <h2>The ledger</h2>
           <p className="panel__count figure">{meetings.length} meetings</p>
         </div>
-        <Ledger meetings={meetings} />
+        <Ledger meetings={meetings} onConvert={convert} converting={converting} />
       </section>
     </div>
   );

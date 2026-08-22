@@ -374,3 +374,26 @@
 
 .settings__actions { display: flex; align-items: center; gap: var(--gap-tight); }
 .settings__status { color: var(--defend); font-size: var(--text-sm); }
+
+.convert {
+  padding: 0.25rem 0.7rem;
+  border: 1px solid var(--reclaim);
+  border-radius: var(--radius);
+  background: var(--paper-raised);
+  color: var(--reclaim);
+  font: inherit;
+  font-size: var(--text-xs);
+  font-weight: 620;
+  cursor: pointer;
+  transition: background var(--duration) var(--ease), color var(--duration) var(--ease);
+}
+
+.convert:hover:not(:disabled) { background: var(--reclaim); color: var(--paper); }
+.convert:disabled { opacity: 0.5; cursor: progress; }
+
+.draft__reclaimed {
+  margin: 0;
+  color: var(--reclaim);
+  font-size: var(--text-xs);
+  font-weight: 620;
+}

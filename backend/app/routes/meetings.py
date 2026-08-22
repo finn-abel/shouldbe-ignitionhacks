@@ -9,9 +9,9 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.data.db import get_session
-from app.data.meetings import get_meeting, list_meetings
+from app.data.meetings import NotConvertible, convert_meeting, get_meeting, list_meetings
 from app.data.users import get_acting_user
-from app.schemas.api import MeetingRead, Stats
+from app.schemas.api import MeetingRead, MeetingStatusUpdate, Stats
 from app.services.money import (
     avoidable_spend,
     budget_comparison,
@@ -54,3 +54,20 @@ def read_stats(bucket: Literal["day", "week"] = "day", session: Session = Depend
         spend_over_time=spend_over_time(ledger, bucket),
         budget=budget_comparison(ledger, budget),
     )
+
+
+@router.patch("/meetings/{meeting_id}", response_model=MeetingRead)
+def update_meeting_status(
+    meeting_id: int,
+    update: MeetingStatusUpdate,
+    session: Session = Depends(get_session),
+):
+    user = get_acting_user(session)
+    try:
+        meeting = convert_meeting(session, user.id, meeting_id)
+    except NotConvertible as refusal:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(refusal)) from refusal
+
+    if meeting is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Meeting not found.")
+    return meeting

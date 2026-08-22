@@ -278,3 +278,31 @@ def test_an_empty_month_is_not_over_budget():
     assert result.month_spend == Decimal("0.00")
     assert result.is_over_budget is False
     assert round(result.percent_over) == -100
+
+
+# --------------------------------------------------------- the convert transition
+
+
+def test_converting_reclaims_the_whole_cost():
+    from app.services.money import reclaimed_by_converting
+
+    assert reclaimed_by_converting(Decimal("450.00")) == Decimal("450.00")
+
+
+def test_reclaimed_amount_is_quantised_to_cents():
+    from app.services.money import reclaimed_by_converting
+
+    assert reclaimed_by_converting(Decimal("12.834")) == Decimal("12.83")
+
+
+def test_converting_twice_cannot_inflate_savings():
+    # The rule is assignment, not accumulation, so a double click is a no-op.
+    from app.services.money import reclaimed_by_converting
+
+    once = reclaimed_by_converting(Decimal("450.00"))
+    twice = reclaimed_by_converting(Decimal("450.00"))
+
+    assert once == twice == Decimal("450.00")
+    assert reclaimed_savings([
+        meeting("450.00", Verdict.EMAIL, Status.CONVERTED, reclaimed=str(twice))
+    ]) == Decimal("450.00")

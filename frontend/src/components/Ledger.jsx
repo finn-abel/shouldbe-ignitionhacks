@@ -13,7 +13,7 @@ const STATUS = { analyzed: 'On the books', held: 'Held', converted: 'Converted' 
  * `keep` verdicts are listed too: this is total spend, and the verdict is an attribute
  * of the transaction rather than a filter on what appears.
  */
-export default function Ledger({ meetings }) {
+export default function Ledger({ meetings, onConvert, converting }) {
   const [openId, setOpenId] = useState(null);
 
   if (!meetings.length) {
@@ -90,8 +90,25 @@ export default function Ledger({ meetings }) {
                 </dl>
                 {meeting.alternative_email && (
                   <div className="draft">
-                    <p className="eyebrow">Send this instead</p>
+                    <div className="draft__head">
+                      <p className="eyebrow">Send this instead</p>
+                      {meeting.status !== 'converted' && (
+                        <button
+                          type="button"
+                          className="convert"
+                          disabled={converting === meeting.id}
+                          onClick={() => onConvert(meeting)}
+                        >
+                          {converting === meeting.id ? 'Converting…' : 'Convert to email'}
+                        </button>
+                      )}
+                    </div>
                     <pre className="draft__body">{meeting.alternative_email}</pre>
+                    {meeting.status === 'converted' && (
+                      <p className="draft__reclaimed">
+                        Converted — {formatMoneyExact(meeting.reclaimed_savings)} never spent.
+                      </p>
+                    )}
                   </div>
                 )}
               </div>

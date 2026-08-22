@@ -126,3 +126,14 @@ def budget_comparison(
         percent_over=percent_over,
         is_over_budget=month_spend > budget,
     )
+
+
+def reclaimed_by_converting(cost: Decimal) -> Decimal:
+    """What swapping a meeting for an email reclaims (doc 2 §5.4).
+
+    The whole cost, because the meeting does not happen at all. Named and kept here with
+    the other money rules rather than inlined at the call site: it is the one place that
+    decides how much a conversion is worth, and assignment (not accumulation) makes
+    converting an already-converted meeting a no-op rather than double-counting.
+    """
+    return _money(cost)
