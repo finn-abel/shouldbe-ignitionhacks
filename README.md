@@ -267,6 +267,12 @@ If the AI provider fails, rate-limits, refuses, or runs out of output tokens, Sh
 records a neutral keep verdict and returns a specific warning to the UI instead of
 silently hiding the failure.
 
+## Cost
+
+An entire ShouldBe analysis run costs under one cent with the default real LLM scoring
+configuration. The offline deterministic stub remains free and is still the default for
+local setup and demos without an API key.
+
 ## Scoring Rubric
 
 The LLM does not decide the final verdict directly. It returns category scores and
