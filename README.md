@@ -27,8 +27,11 @@ python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env            # first time only
+PYTHONPATH=. python -m app.seed # seeds the shared guest with a month of meetings
 uvicorn app.main:app --reload --port 8000
 ```
+
+Re-run the seed any time to reset the guest's numbers before a demo.
 
 Verify: <http://localhost:8000/health> → `{"status":"ok"}`
 API docs: <http://localhost:8000/docs>
@@ -42,7 +45,9 @@ cp .env.example .env            # first time only
 npm run dev
 ```
 
-Verify: <http://localhost:5173> → type a meeting, press Analyze, see it costed and judged.
+Verify: <http://localhost:5173> → "Continue as guest" opens the seeded dashboard.
+Google sign-in needs `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`; without them that button
+returns a clear "not configured" message and guest entry still works.
 The backend must be running too; the frontend calls it cross-origin at `VITE_API_BASE_URL`.
 Use `localhost`, not `127.0.0.1` — the Vite dev server binds IPv6 loopback.
 

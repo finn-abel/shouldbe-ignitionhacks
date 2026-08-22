@@ -1,10 +1,8 @@
-"""User lookup (doc 2 §4.1).
+"""User lookup and entry (doc 2 §4.1, §5.5).
 
-# TEMPORARY: replaced in step 11
-Until Google sign-in and guest entry exist (doc 2 §5.5), every request acts as one
-find-or-created demo user. Step 11 resolves the acting user from the session instead and
-seeds the real shared guest; the rest of the code already scopes every query by user id,
-so only this function changes.
+Two ways in, one outcome: Google sign-in resolves to a `User` found or created by its
+`google_sub`, "continue as guest" resolves to the single shared `is_guest` row. Both hand
+back a real, fully writable user — guest is shared and pre-seeded, never restricted.
 """
 
 from decimal import Decimal
@@ -15,26 +13,68 @@ from sqlalchemy.orm import Session
 from app.data.models import Budget, RoleTierRate, User
 from app.services.costing import DEFAULT_TIER_RATES
 
-DEMO_USER_EMAIL = "demo@shouldbe.local"
-DEMO_USER_NAME = "Demo"
+GUEST_EMAIL = "guest@shouldbe.local"
+GUEST_NAME = "Guest"
 
-# TEMPORARY: replaced in step 11
-# The dashboard headline is "spend vs budget", so the demo user needs a budget before
-# step 9 builds the editor for it. Step 11's seed script sets the real guest figure.
-DEMO_BUDGET = Decimal("3000.00")
+# What a brand-new signed-in user starts with. The guest's figures come from seed.py.
+STARTING_BUDGET = Decimal("6000.00")
 
 
-def get_acting_user(session: Session) -> User:
-    """The user every request currently acts as."""
-    user = session.scalar(select(User).where(User.email == DEMO_USER_EMAIL))
-    if user is None:
-        user = User(email=DEMO_USER_EMAIL, display_name=DEMO_USER_NAME, is_guest=True)
-        user.budget = Budget(monthly_amount=DEMO_BUDGET)
-        user.tier_rates = [
-            RoleTierRate(tier=tier, hourly_rate=rate)
-            for tier, rate in DEFAULT_TIER_RATES.items()
-        ]
-        session.add(user)
+def get_user(session: Session, user_id: int) -> User | None:
+    return session.get(User, user_id)
+
+
+def _with_starting_config(user: User) -> User:
+    """Every user needs a cost basis before their first meeting can be priced."""
+    user.budget = Budget(monthly_amount=STARTING_BUDGET)
+    user.tier_rates = [
+        RoleTierRate(tier=tier, hourly_rate=rate) for tier, rate in DEFAULT_TIER_RATES.items()
+    ]
+    return user
+
+
+def get_or_create_guest(session: Session) -> User:
+    """The one shared guest row (doc 2 §4.1).
+
+    Normally created by `seed.py` with curated data. Created bare here as a fallback so
+    guest entry works even on a database nobody remembered to seed.
+    """
+    guest = session.scalar(select(User).where(User.is_guest.is_(True)))
+    if guest is None:
+        guest = _with_starting_config(
+            User(email=GUEST_EMAIL, display_name=GUEST_NAME, is_guest=True)
+        )
+        session.add(guest)
         session.commit()
-        session.refresh(user)
+        session.refresh(guest)
+    return guest
+
+
+def find_or_create_by_google(
+    session: Session, google_sub: str, email: str, display_name: str
+) -> User:
+    """Resolve a Google sign-in to a user, keyed on the stable `sub` claim (doc 2 §5.5)."""
+    user = session.scalar(select(User).where(User.google_sub == google_sub))
+    if user is not None:
+        return user
+
+    # Someone may have signed in before under the same address; adopt that row rather
+    # than colliding on the unique email.
+    user = session.scalar(select(User).where(User.email == email))
+    if user is not None:
+        user.google_sub = google_sub
+        session.commit()
+        return user
+
+    user = _with_starting_config(
+        User(
+            email=email,
+            display_name=display_name or email.split("@")[0],
+            google_sub=google_sub,
+            is_guest=False,
+        )
+    )
+    session.add(user)
+    session.commit()
+    session.refresh(user)
     return user

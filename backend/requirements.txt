@@ -14,7 +14,10 @@ ics
 pytest
 httpx          # FastAPI TestClient dependency
 
+# --- auth (step 11) ---
+authlib               # Google OAuth (openid email profile scopes only)
+itsdangerous          # signs the session cookie
+
 # --- NOT YET USED — added in the step that needs them ---
-# authlib               # Google OAuth            (step 11)
 # postmarker            # Postmark in/outbound    (step 13)
 # anthropic             # LLM provider SDK        (step 12)

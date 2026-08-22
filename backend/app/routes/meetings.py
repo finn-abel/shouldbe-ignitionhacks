@@ -10,7 +10,8 @@ from sqlalchemy.orm import Session
 
 from app.data.db import get_session
 from app.data.meetings import NotConvertible, convert_meeting, get_meeting, list_meetings
-from app.data.users import get_acting_user
+from app.data.models import User
+from app.routes.auth import acting_user
 from app.schemas.api import MeetingRead, MeetingStatusUpdate, Stats
 from app.services.money import (
     avoidable_spend,
@@ -25,24 +26,19 @@ router = APIRouter(prefix="/api", tags=["meetings"])
 
 
 @router.get("/meetings", response_model=list[MeetingRead])
-def read_meetings(session: Session = Depends(get_session)):
-    user = get_acting_user(session)
+def read_meetings(
+    session: Session = Depends(get_session),
+    user: User = Depends(acting_user),
+):
     return list_meetings(session, user.id)
 
 
-@router.get("/meetings/{meeting_id}", response_model=MeetingRead)
-def read_meeting(meeting_id: int, session: Session = Depends(get_session)):
-    user = get_acting_user(session)
-    meeting = get_meeting(session, user.id, meeting_id)
-    if meeting is None:
-        # 404 rather than 403 for someone else's meeting: never confirm it exists.
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Meeting not found.")
-    return meeting
-
-
 @router.get("/stats", response_model=Stats)
-def read_stats(bucket: Literal["day", "week"] = "day", session: Session = Depends(get_session)):
-    user = get_acting_user(session)
+def read_stats(
+    bucket: Literal["day", "week"] = "day",
+    session: Session = Depends(get_session),
+    user: User = Depends(acting_user),
+):
     ledger = [MeetingRead.model_validate(m) for m in list_meetings(session, user.id)]
     budget = user.budget.monthly_amount if user.budget else None
 
@@ -56,13 +52,26 @@ def read_stats(bucket: Literal["day", "week"] = "day", session: Session = Depend
     )
 
 
+@router.get("/meetings/{meeting_id}", response_model=MeetingRead)
+def read_meeting(
+    meeting_id: int,
+    session: Session = Depends(get_session),
+    user: User = Depends(acting_user),
+):
+    meeting = get_meeting(session, user.id, meeting_id)
+    if meeting is None:
+        # 404 rather than 403 for someone else's meeting: never confirm it exists.
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Meeting not found.")
+    return meeting
+
+
 @router.patch("/meetings/{meeting_id}", response_model=MeetingRead)
 def update_meeting_status(
     meeting_id: int,
     update: MeetingStatusUpdate,
     session: Session = Depends(get_session),
+    user: User = Depends(acting_user),
 ):
-    user = get_acting_user(session)
     try:
         meeting = convert_meeting(session, user.id, meeting_id)
     except NotConvertible as refusal:

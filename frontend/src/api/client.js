@@ -21,6 +21,9 @@ async function request(path, options = {}) {
   try {
     response = await fetch(`${API_BASE_URL}${path}`, {
       headers: { 'Content-Type': 'application/json' },
+      // The acting user lives in a session cookie, and the API is a different origin —
+      // without this the cookie is never sent and every call comes back 401.
+      credentials: 'include',
       ...options,
     });
   } catch {
@@ -29,9 +32,32 @@ async function request(path, options = {}) {
   }
 
   const body = await response.json().catch(() => null);
-  if (!response.ok) throw new Error(readErrorDetail(body, response.status));
+  if (!response.ok) {
+    const failure = new Error(readErrorDetail(body, response.status));
+    failure.status = response.status;
+    throw failure;
+  }
   return body;
 }
+
+// --- entry (doc 2 §5.5) ---
+
+/** Who this browser is acting as. Throws with status 401 when nobody has entered yet. */
+export function getMe() {
+  return request('/api/auth/me');
+}
+
+/** Continue as guest — a real, writable, pre-seeded user, not a restricted mode. */
+export function enterAsGuest() {
+  return request('/api/auth/guest', { method: 'POST' });
+}
+
+export function logout() {
+  return request('/api/auth/logout', { method: 'POST' });
+}
+
+/** A full page navigation, not a fetch: the browser has to follow Google's redirects. */
+export const GOOGLE_LOGIN_URL = `${API_BASE_URL}/api/auth/google/login`;
 
 /** Door B: analyze a typed-in meeting and record it in the ledger. */
 export function analyzeMeeting(meeting) {
@@ -52,15 +78,10 @@ export function getStats({ bucket = 'day' } = {}) {
   return request(`/api/stats?bucket=${bucket}`);
 }
 
-// --- Endpoints whose backend arrives in later steps. Wired here so the client stays the
-// --- one place that knows the API surface; nothing calls them yet.
-
-/** Step 9. */
 export function getBudget() {
   return request('/api/budget');
 }
 
-/** Step 9. */
 export function updateBudget(monthlyAmount) {
   return request('/api/budget', {
     method: 'PUT',
@@ -68,17 +89,15 @@ export function updateBudget(monthlyAmount) {
   });
 }
 
-/** Step 9. */
 export function getTierRates() {
   return request('/api/tiers');
 }
 
-/** Step 9. */
 export function updateTierRates(rates) {
   return request('/api/tiers', { method: 'PUT', body: JSON.stringify(rates) });
 }
 
-/** Step 10: swap a flagged meeting for the drafted email. */
+/** Swap a flagged meeting for the drafted email (doc 2 §5.4). */
 export function convertMeeting(id) {
   return request(`/api/meetings/${id}`, {
     method: 'PATCH',

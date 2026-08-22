@@ -130,3 +130,14 @@ class MeetingStatusUpdate(BaseModel):
                 f"got {value.value!r}."
             )
         return value
+
+
+class UserRead(BaseModel):
+    """Who the request is acting as (doc 2 §4.1)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    email: str
+    display_name: str
+    is_guest: bool

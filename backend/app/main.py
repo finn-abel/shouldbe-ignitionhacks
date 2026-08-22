@@ -10,6 +10,7 @@ from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.sessions import SessionMiddleware
 
 from app.data.db import init_db
 from app.routes import analyze, auth, budget, meetings, tiers, webhook
@@ -17,6 +18,7 @@ from app.routes import analyze, auth, budget, meetings, tiers, webhook
 load_dotenv()
 
 DEFAULT_FRONTEND_ORIGIN = "http://localhost:5173"
+DEFAULT_SESSION_SECRET = "dev-only-not-a-real-secret"
 
 
 @asynccontextmanager
@@ -29,6 +31,15 @@ app = FastAPI(
     title="ShouldBe",
     description="Meeting spend management.",
     lifespan=lifespan,
+)
+
+# The session cookie carries the acting user id (doc 2 §5.5). SameSite=lax so the
+# Google OAuth redirect back to the callback still carries it.
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=os.getenv("SESSION_SECRET", DEFAULT_SESSION_SECRET),
+    same_site="lax",
+    https_only=False,
 )
 
 app.add_middleware(

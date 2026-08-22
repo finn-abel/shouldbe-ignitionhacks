@@ -397,3 +397,90 @@
   font-size: var(--text-xs);
   font-weight: 620;
 }
+
+/* ------------------------------------------------------------------- entry */
+
+.entry {
+  display: grid;
+  gap: clamp(1.75rem, 5vw, 4rem);
+  align-content: center;
+  min-height: 100vh;
+  padding: var(--gap-section) clamp(1.25rem, 6vw, 5rem);
+  max-width: 68rem;
+  margin-inline: auto;
+}
+
+@media (min-width: 54rem) {
+  .entry { grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr); align-items: center; }
+}
+
+.entry__lede { display: flex; flex-direction: column; gap: var(--gap-tight); }
+
+.entry__headline {
+  margin: 0;
+  max-width: 18ch;
+  font-size: clamp(2rem, 1.2rem + 3.4vw, 3.5rem);
+  font-weight: 640;
+  letter-spacing: -0.04em;
+  line-height: 1.02;
+  text-wrap: balance;
+}
+
+.entry__body { margin: 0; max-width: 44ch; color: var(--ink-soft); }
+
+.entry__doors {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-tight);
+  padding: var(--gap);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-card);
+  background: var(--paper-raised);
+  box-shadow: var(--shadow-card);
+}
+
+.entry__google { text-align: center; text-decoration: none; align-self: stretch; }
+
+.entry__guest {
+  padding: 0.7rem 1.4rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 560;
+  cursor: pointer;
+  transition: border-color var(--duration) var(--ease), background var(--duration) var(--ease);
+}
+
+.entry__guest:hover:not(:disabled) { border-color: var(--ink); background: var(--paper-sunken); }
+.entry__guest:disabled { opacity: 0.5; cursor: progress; }
+
+.entry__note { margin: 0; color: var(--ink-faint); font-size: var(--text-xs); max-width: 42ch; }
+
+/* ------------------------------------------------------------------ whoami */
+
+.whoami {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  padding-left: var(--gap-tight);
+  margin-left: var(--gap-hair);
+  border-left: 1px solid var(--rule);
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+}
+
+.whoami__out {
+  border: 0;
+  padding: 0;
+  background: none;
+  color: var(--ink-faint);
+  font: inherit;
+  font-size: var(--text-xs);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.whoami__out:hover { color: var(--leak); }
